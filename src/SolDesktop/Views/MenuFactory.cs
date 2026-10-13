@@ -1,5 +1,7 @@
 using System;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 
 namespace SolDesktop.Views;
 
@@ -24,5 +26,25 @@ internal static class MenuFactory
         }
 
         return menu;
+    }
+
+    public static void Open(ContextMenu menu, UIElement target, PlacementMode placement, Action? closed = null)
+    {
+        menu.StaysOpen = false;
+        menu.PlacementTarget = target;
+        menu.Placement = placement;
+        menu.Closed += OnClosed;
+        menu.Opened += OnOpened;
+        menu.IsOpen = true;
+
+        void OnOpened(object sender, RoutedEventArgs e) => MenuDismiss.Attach(menu);
+
+        void OnClosed(object sender, RoutedEventArgs e)
+        {
+            menu.Opened -= OnOpened;
+            menu.Closed -= OnClosed;
+            MenuDismiss.Detach();
+            closed?.Invoke();
+        }
     }
 }

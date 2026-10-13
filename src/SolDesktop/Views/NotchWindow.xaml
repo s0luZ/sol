@@ -25,7 +25,7 @@
     </Window.Resources>
 
     <!-- Side and bottom margins leave room for the shadow; the top stays flush with the screen edge. -->
-    <Grid Margin="28,0,28,28">
+    <Grid Margin="28,0,28,28" ClipToBounds="True">
         <controls:FlaredPanel x:Name="Bar" Edge="Top"
                               HorizontalAlignment="Center" VerticalAlignment="Top"
                               Padding="14,0,12,1"
@@ -33,6 +33,11 @@
                               BorderBrush="{DynamicResource Sol.SurfaceBorderBrush}"
                               CornerRadius="{Binding CornerRadius, Source={x:Static vm:Appearance.Current}}"
                               FlareRadius="{Binding FlareRadius, Source={x:Static vm:Appearance.Current}}"
+                              Cursor="Hand"
+                              MouseLeftButtonDown="OnBarMouseDown"
+                              MouseMove="OnBarMouseMove"
+                              MouseLeftButtonUp="OnBarMouseUp"
+                              LostMouseCapture="OnBarLostCapture"
                               MouseRightButtonUp="OnBarRightClick">
             <controls:FlaredPanel.RenderTransform>
                 <TranslateTransform x:Name="Slide" />

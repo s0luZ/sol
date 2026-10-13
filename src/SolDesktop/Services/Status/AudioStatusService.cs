@@ -1,10 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
+using SolDesktop.Interop;
 
 namespace SolDesktop.Services.Status;
+
+public sealed record AudioDeviceEntry(string Id, string Name, bool IsDefault);
 
 /// <summary>Tracks the default playback device and its volume/mute state.</summary>
 public sealed class AudioStatusService : IMMNotificationClient, IDisposable
@@ -81,6 +85,70 @@ public sealed class AudioStatusService : IMMNotificationClient, IDisposable
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <param name="volume">0.0 - 1.0</param>
+    public void SetVolume(double volume)
+    {
+        if (_device is null) return;
+        try
+        {
+            _device.AudioEndpointVolume.MasterVolumeLevelScalar = (float)Math.Clamp(volume, 0, 1);
+            if (volume > 0 && _device.AudioEndpointVolume.Mute) _device.AudioEndpointVolume.Mute = false;
+        }
+        catch (COMException ex)
+        {
+            Log.Error(ex);
+        }
+    }
+
+    public void SetMuted(bool muted)
+    {
+        if (_device is null) return;
+        try
+        {
+            _device.AudioEndpointVolume.Mute = muted;
+        }
+        catch (COMException ex)
+        {
+            Log.Error(ex);
+        }
+    }
+
+    public IReadOnlyList<AudioDeviceEntry> GetOutputDevices()
+    {
+        var result = new List<AudioDeviceEntry>();
+        string? defaultId = _device?.ID;
+        try
+        {
+            foreach (MMDevice device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+            {
+                using (device)
+                {
+                    result.Add(new AudioDeviceEntry(device.ID, device.FriendlyName, device.ID == defaultId));
+                }
+            }
+        }
+        catch (COMException ex)
+        {
+            Log.Error(ex);
+        }
+
+        return result;
+    }
+
+    public bool SetDefaultOutput(string deviceId)
+    {
+        try
+        {
+            AudioPolicy.SetDefaultEndpoint(deviceId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            return false;
+        }
     }
 
     private void OnVolumeNotification(AudioVolumeNotificationData data) => _dispatcher.InvokeAsync(Refresh);

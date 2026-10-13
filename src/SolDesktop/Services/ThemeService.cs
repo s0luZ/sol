@@ -15,15 +15,23 @@ public static class ThemeService
         Color surface = Parse(s.SurfaceColor, defaults.SurfaceColor);
         Color foreground = Parse(s.ForegroundColor, defaults.ForegroundColor);
 
+        bool glass = s.Theme == ThemeKind.Glass;
+
         ResourceDictionary r = Application.Current.Resources;
         r["Sol.AccentColor"] = accent;
         r["Sol.AccentBrush"] = Brush(accent);
         r["Sol.OnAccentBrush"] = Brush(IsLight(accent) ? Color.FromRgb(0x14, 0x14, 0x16) : Colors.White);
-        r["Sol.SurfaceBrush"] = Brush(WithAlpha(surface, s.SurfaceOpacity));
         r["Sol.SurfaceSolidBrush"] = Brush(surface);
-        r["Sol.SurfaceRaisedBrush"] = Brush(Mix(surface, foreground, 0.06));
-        r["Sol.SurfaceHoverBrush"] = Brush(Mix(surface, foreground, 0.12));
-        r["Sol.SurfaceBorderBrush"] = Brush(WithAlpha(foreground, 0.13));
+
+        // Glass is the same Dark palette with the bars see-through, so wallpaper shows
+        // through the flared shape. No extra blur window — that drew a rectangle and
+        // slid in from a monitor above the primary display.
+        double barAlpha = glass ? s.GlassOpacity : s.SurfaceOpacity;
+        r["Sol.SurfaceBrush"] = Brush(WithAlpha(surface, barAlpha));
+        r["Sol.SurfaceRaisedBrush"] = Brush(WithAlpha(Mix(surface, foreground, 0.06), Math.Min(1, barAlpha + 0.06)));
+        r["Sol.SurfaceHoverBrush"] = Brush(WithAlpha(Mix(surface, foreground, 0.12), Math.Min(1, barAlpha + 0.10)));
+        r["Sol.SurfaceBorderBrush"] = Brush(WithAlpha(foreground, glass ? 0.18 : 0.13));
+
         r["Sol.ForegroundBrush"] = Brush(foreground);
         r["Sol.ForegroundDimBrush"] = Brush(WithAlpha(foreground, 0.6));
         r["Sol.ForegroundFaintBrush"] = Brush(WithAlpha(foreground, 0.25));

@@ -20,7 +20,71 @@ public partial class NotchWindow : Window
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
+    private const double PullThreshold = 6;
+
+    private Point? _pressPoint;
+    private bool _pulling;
+
     public EdgeBarController Controller { get; }
+
+    /// <summary>The user started dragging the notch downwards.</summary>
+    public event EventHandler? PullStarted;
+
+    /// <summary>Distance (DIPs) dragged below the press point.</summary>
+    public event EventHandler<double>? PullMoved;
+
+    /// <summary>Drag released with its final distance.</summary>
+    public event EventHandler<double>? PullEnded;
+
+    /// <summary>The notch was clicked without dragging.</summary>
+    public event EventHandler? Clicked;
+
+    private void OnBarMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _pressPoint = e.GetPosition(this);
+        _pulling = false;
+        Bar.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnBarMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_pressPoint is not Point press) return;
+
+        double distance = e.GetPosition(this).Y - press.Y;
+        if (!_pulling && distance > PullThreshold)
+        {
+            _pulling = true;
+            PullStarted?.Invoke(this, EventArgs.Empty);
+        }
+
+        if (_pulling) PullMoved?.Invoke(this, Math.Max(0, distance));
+    }
+
+    private void OnBarMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_pressPoint is not Point press) return;
+
+        double distance = e.GetPosition(this).Y - press.Y;
+        bool pulling = _pulling;
+        _pressPoint = null;
+        _pulling = false;
+        Bar.ReleaseMouseCapture();
+
+        if (pulling) PullEnded?.Invoke(this, Math.Max(0, distance));
+        else Clicked?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
+    }
+
+    private void OnBarLostCapture(object sender, MouseEventArgs e)
+    {
+        if (_pressPoint is null) return;
+
+        bool pulling = _pulling;
+        _pressPoint = null;
+        _pulling = false;
+        if (pulling) PullEnded?.Invoke(this, 0);
+    }
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -53,11 +117,8 @@ public partial class NotchWindow : Window
             ("Hide notch", () => app.ModifySettings(s => s.NotchEnabled = false)),
             (null, null),
             ("Quit Sol Desktop", app.Shutdown));
-        menu.PlacementTarget = Bar;
-        menu.Placement = PlacementMode.MousePoint;
         Controller.KeepOpen = true;
-        menu.Closed += (_, _) => Controller.KeepOpen = false;
-        menu.IsOpen = true;
+        MenuFactory.Open(menu, Bar, PlacementMode.MousePoint, () => Controller.KeepOpen = false);
         e.Handled = true;
     }
 

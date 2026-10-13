@@ -84,6 +84,7 @@ public sealed class SettingsViewModel : ObservableObject
     public bool NotchEnabled { get => S.NotchEnabled; set => Set(S.NotchEnabled, value, v => S.NotchEnabled = v); }
     public EdgeBarMode NotchMode { get => S.NotchMode; set => Set(S.NotchMode, value, v => S.NotchMode = v); }
     public double NotchScale { get => S.NotchScale; set => Set(S.NotchScale, Math.Round(value, 2), v => S.NotchScale = v); }
+    public double ControlCentreScale { get => S.ControlCentreScale; set => Set(S.ControlCentreScale, Math.Round(value, 2), v => S.ControlCentreScale = v); }
 
     // ---- Dock ----
 
@@ -92,8 +93,22 @@ public sealed class SettingsViewModel : ObservableObject
     public double DockIconSize { get => S.DockIconSize; set => Set(S.DockIconSize, Math.Round(value), v => S.DockIconSize = v); }
     public double DockMagnification { get => S.DockMagnification; set => Set(S.DockMagnification, Math.Round(value, 2), v => S.DockMagnification = v); }
     public TaskbarMode TaskbarMode { get => S.TaskbarMode; set => Set(S.TaskbarMode, value, v => S.TaskbarMode = v); }
+    public bool CenterStartMenu { get => S.CenterStartMenu; set => Set(S.CenterStartMenu, value, v => S.CenterStartMenu = v); }
 
     // ---- Appearance ----
+
+    public ThemeKind Theme
+    {
+        get => S.Theme;
+        set
+        {
+            Set(S.Theme, value, v => S.Theme = v);
+            OnPropertyChanged(nameof(IsGlassTheme));
+        }
+    }
+
+    public bool IsGlassTheme => S.Theme == ThemeKind.Glass;
+    public double GlassOpacity { get => S.GlassOpacity; set => Set(S.GlassOpacity, Math.Round(value, 2), v => S.GlassOpacity = v); }
 
     public string AccentColor { get => S.AccentColor; set => SetColor(S.AccentColor, value, v => S.AccentColor = v); }
     public string SurfaceColor { get => S.SurfaceColor; set => SetColor(S.SurfaceColor, value, v => S.SurfaceColor = v); }
@@ -134,10 +149,12 @@ public sealed class SettingsViewModel : ObservableObject
         S.SurfaceColor = d.SurfaceColor;
         S.ForegroundColor = d.ForegroundColor;
         S.SurfaceOpacity = d.SurfaceOpacity;
+        S.GlassOpacity = d.GlassOpacity;
         S.FontFamily = d.FontFamily;
         S.CornerRadius = d.CornerRadius;
         S.FlareRadius = d.FlareRadius;
         S.NotchScale = d.NotchScale;
+        S.ControlCentreScale = d.ControlCentreScale;
         S.DockIconSize = d.DockIconSize;
         S.DockMagnification = d.DockMagnification;
         Refresh();

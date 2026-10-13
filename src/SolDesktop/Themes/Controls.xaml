@@ -42,6 +42,30 @@
         <Setter Property="Margin" Value="0,0,0,10" />
     </Style>
 
+    <Style x:Key="Sol.ThemeCard" TargetType="RadioButton">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="{DynamicResource Sol.ForegroundBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bd" Padding="12" CornerRadius="12" BorderThickness="2"
+                            Background="{DynamicResource Sol.SurfaceHoverBrush}"
+                            BorderBrush="Transparent">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Sol.ForegroundFaintBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Sol.AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ===== Toggle switch ===== -->
 
     <Style x:Key="Sol.ToggleSwitch" TargetType="CheckBox">

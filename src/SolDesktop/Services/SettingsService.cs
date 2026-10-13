@@ -31,6 +31,15 @@ public enum TaskbarMode
     Hide,
 }
 
+public enum ThemeKind
+{
+    /// <summary>Solid near-black bars.</summary>
+    Dark,
+
+    /// <summary>Frosted, blurred translucent bars (glassmorphism).</summary>
+    Glass,
+}
+
 public sealed class AppSettings
 {
     public const int CurrentVersion = 2;
@@ -40,16 +49,20 @@ public sealed class AppSettings
     public bool NotchEnabled { get; set; } = true;
     public EdgeBarMode NotchMode { get; set; } = EdgeBarMode.SmartHide;
     public double NotchScale { get; set; } = 1.0;
+    public double ControlCentreScale { get; set; } = 1.0;
 
     public bool DockEnabled { get; set; } = true;
     public EdgeBarMode DockMode { get; set; } = EdgeBarMode.SmartHide;
     public double DockIconSize { get; set; } = 44;
     public double DockMagnification { get; set; } = 1.6;
     public TaskbarMode TaskbarMode { get; set; } = TaskbarMode.Hide;
+    public bool CenterStartMenu { get; set; } = true;
 
     /// <summary>Shortcut paths, exe paths or shell:AppsFolder\&lt;AppUserModelID&gt; entries. Null until first import.</summary>
     public List<string>? PinnedApps { get; set; }
 
+    public ThemeKind Theme { get; set; } = ThemeKind.Dark;
+    public double GlassOpacity { get; set; } = 0.72;
     public string AccentColor { get; set; } = "#FFB547";
     public string SurfaceColor { get; set; } = "#0D0D10";
     public string ForegroundColor { get; set; } = "#F5F3EE";
@@ -60,6 +73,10 @@ public sealed class AppSettings
 
     public bool TaskbarModifiedBySol { get; set; }
     public bool OriginalTaskbarAutoHide { get; set; }
+    public bool StartAlignmentModifiedBySol { get; set; }
+
+    /// <summary>Original HKCU TaskbarAl value (0 = left, 1 = centre); null when the value didn't exist.</summary>
+    public int? OriginalTaskbarAlignment { get; set; }
 }
 
 public sealed class SettingsService
@@ -97,6 +114,9 @@ public sealed class SettingsService
             // v0.1 shipped with the dock switched off because it didn't exist yet.
             Current.DockEnabled = true;
         }
+
+        // Old glass used a 35% grey blur window. The new look is Dark at ~72% opacity.
+        if (Math.Abs(Current.GlassOpacity - 0.35) < 0.001) Current.GlassOpacity = 0.72;
 
         Current.Version = AppSettings.CurrentVersion;
     }

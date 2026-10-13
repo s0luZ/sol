@@ -71,10 +71,30 @@ public sealed class FlaredPanel : Decorator
         return arrangeSize;
     }
 
+    /// <summary>The filled outline in local coordinates, or null before layout.</summary>
+    public Geometry? CreateFillGeometry()
+    {
+        Geometry? fill = null;
+        BuildGeometry(RenderSize, ref fill, out _);
+        return fill;
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
-        double w = RenderSize.Width;
-        double h = RenderSize.Height;
+        Geometry? fill = null;
+        BuildGeometry(RenderSize, ref fill, out Geometry? stroke);
+        if (fill is null) return;
+
+        dc.DrawGeometry(Background, null, fill);
+        if (stroke is null || BorderBrush is null || BorderThickness <= 0) return;
+        dc.DrawGeometry(null, new Pen(BorderBrush, BorderThickness), stroke);
+    }
+
+    private void BuildGeometry(Size size, ref Geometry? fillResult, out Geometry? strokeResult)
+    {
+        strokeResult = null;
+        double w = size.Width;
+        double h = size.Height;
         if (w <= 0 || h <= 0) return;
 
         double f = Math.Max(0, Math.Min(FlareRadius, h / 2));
@@ -105,9 +125,7 @@ public sealed class FlaredPanel : Decorator
             Outline(g);
         }
         fill.Freeze();
-        dc.DrawGeometry(Background, null, fill);
-
-        if (BorderBrush is null || BorderThickness <= 0) return;
+        fillResult = fill;
 
         // The edge touching the screen border is left open so it reads as part of the bezel.
         var stroke = new StreamGeometry();
@@ -117,6 +135,6 @@ public sealed class FlaredPanel : Decorator
             Outline(g);
         }
         stroke.Freeze();
-        dc.DrawGeometry(null, new Pen(BorderBrush, BorderThickness), stroke);
+        strokeResult = stroke;
     }
 }

@@ -380,11 +380,8 @@ public partial class DockWindow : Window
 
     private void ShowMenu(ContextMenu menu, UIElement target)
     {
-        menu.PlacementTarget = target;
-        menu.Placement = PlacementMode.Top;
         Controller.KeepOpen = true;
-        menu.Closed += (_, _) => Controller.KeepOpen = false;
-        menu.IsOpen = true;
+        MenuFactory.Open(menu, target, PlacementMode.Top, () => Controller.KeepOpen = false);
     }
 
     // ---- window previews ----

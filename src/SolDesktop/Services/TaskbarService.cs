@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using Microsoft.Win32;
 using static SolDesktop.Interop.NativeMethods;
 
 namespace SolDesktop.Services;
@@ -11,17 +15,35 @@ namespace SolDesktop.Services;
 /// </summary>
 public sealed class TaskbarService
 {
+    private const string AdvancedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+    private const string AlignmentValue = "TaskbarAl";
+
+    private static readonly string[] StartHosts =
+    {
+        "StartMenuExperienceHost.exe",
+        "SearchHost.exe",
+        "PhoneExperienceHost.exe",
+        "CrossDeviceResume.exe",
+    };
+
     private readonly SettingsService _settings;
-    private TaskbarMode? _applied;
+    private readonly WinEventDelegate _showHookProc;
+    private readonly WinEventDelegate _foregroundHookProc;
+    private IntPtr _showHook;
+    private IntPtr _foregroundHook;
+    private (TaskbarMode Mode, bool CenterStart)? _applied;
+    private int _centerGeneration;
 
     public TaskbarService(SettingsService settings)
     {
         _settings = settings;
+        _showHookProc = OnWindowShown;
+        _foregroundHookProc = OnForegroundChanged;
     }
 
-    public void Apply(TaskbarMode mode)
+    public void Apply(TaskbarMode mode, bool centerStart)
     {
-        if (_applied == mode) return;
+        if (_applied == (mode, centerStart)) return;
 
         if (mode == TaskbarMode.Leave)
         {
@@ -40,18 +62,31 @@ public sealed class TaskbarService
         // Auto-hide frees the reserved work area so maximized windows reach the bottom edge.
         SetAutoHide(true);
         SetTaskbarsVisible(mode != TaskbarMode.Hide);
-        _applied = mode;
+        // Hide the taskbar as soon as Explorer flashes it (Start, flyouts). Also watch for Start
+        // itself so we can slide it to the middle of the screen.
+        SetShowHook(mode == TaskbarMode.Hide || centerStart);
+
+        // TaskbarAl helps when the bar is only auto-hidden. A fully hidden bar ignores it, so
+        // CenterStartWindows() also moves the Start window after it appears.
+        if (centerStart) SetTaskbarAlignmentCentered();
+        else RestoreStartAlignment();
+
+        _applied = (mode, centerStart);
     }
 
     /// <summary>Explorer re-shows the taskbar on some events (Start menu, explorer restart).</summary>
     public void Enforce()
     {
-        if (_applied == TaskbarMode.Hide) SetTaskbarsVisible(false);
+        if (_applied?.Mode == TaskbarMode.Hide) SetTaskbarsVisible(false);
     }
 
     public void Restore()
     {
-        _applied = TaskbarMode.Leave;
+        _applied = (TaskbarMode.Leave, false);
+        Interlocked.Increment(ref _centerGeneration);
+        SetShowHook(false);
+        RestoreStartAlignment();
+
         AppSettings s = _settings.Current;
         if (!s.TaskbarModifiedBySol) return;
 
@@ -59,6 +94,228 @@ public sealed class TaskbarService
         SetAutoHide(s.OriginalTaskbarAutoHide);
         s.TaskbarModifiedBySol = false;
         _settings.Save();
+    }
+
+    /// <summary>
+    /// Explorer re-shows the taskbar whenever Start or a flyout opens; hide it the moment it appears
+    /// instead of waiting for the next window change.
+    /// </summary>
+    private void SetShowHook(bool enabled)
+    {
+        if (enabled && _showHook == IntPtr.Zero)
+        {
+            _showHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, IntPtr.Zero, _showHookProc, 0, 0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            _foregroundHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _foregroundHookProc, 0, 0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        }
+        else if (!enabled && _showHook != IntPtr.Zero)
+        {
+            UnhookWinEvent(_showHook);
+            _showHook = IntPtr.Zero;
+            if (_foregroundHook != IntPtr.Zero)
+            {
+                UnhookWinEvent(_foregroundHook);
+                _foregroundHook = IntPtr.Zero;
+            }
+        }
+    }
+
+    private void OnForegroundChanged(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        if (idObject != 0 || idChild != 0) return;
+        if (_applied?.CenterStart == true && IsStartHost(hwnd)) ScheduleCenterStart();
+    }
+
+    private void OnWindowShown(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        if (_applied is null) return;
+
+        var className = new StringBuilder(64);
+        GetClassName(hwnd, className, className.Capacity);
+        string name = className.ToString();
+
+        if (_applied.Value.Mode == TaskbarMode.Hide && name is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
+        {
+            ShowWindow(hwnd, SW_HIDE);
+        }
+
+        if (idObject != 0 || idChild != 0) return;
+        if (_applied.Value.CenterStart && IsStartHost(hwnd)) ScheduleCenterStart();
+    }
+
+    private bool StartIsVisible()
+    {
+        bool found = false;
+        EnumWindows((hwnd, _) =>
+        {
+            if (IsStartHost(hwnd) && TryGetVisibleBounds(hwnd, out RECT bounds) &&
+                bounds.Right - bounds.Left >= 180 && bounds.Bottom - bounds.Top >= 180)
+            {
+                found = true;
+                return false;
+            }
+
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    /// <summary>
+    /// Explorer places Start at the left of a hidden taskbar. Move every Start/Search flyout
+    /// together so a two-pane menu stays intact, retrying while the open animation finishes.
+    /// </summary>
+    private void ScheduleCenterStart()
+    {
+        int generation = Interlocked.Increment(ref _centerGeneration);
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            // Explorer re-shows the taskbar and repositions Start during the open animation.
+            // Keep correcting both until Start has been gone for a short stretch.
+            int gone = 0;
+            for (int i = 0; i < 200 && generation == Volatile.Read(ref _centerGeneration); i++)
+            {
+                if (_applied?.Mode == TaskbarMode.Hide) SetTaskbarsVisible(false);
+                bool startOpen = StartIsVisible();
+                if (startOpen && _applied?.CenterStart == true) CenterStartWindows();
+                gone = startOpen ? 0 : gone + 1;
+                if (gone > 8 && i > 8) break;
+                Thread.Sleep(40);
+            }
+        });
+    }
+
+    private void CenterStartWindows()
+    {
+        var windows = new List<(IntPtr Hwnd, RECT Bounds)>();
+        EnumWindows((hwnd, _) =>
+        {
+            if (IsStartHost(hwnd) && TryGetVisibleBounds(hwnd, out RECT bounds) &&
+                bounds.Right - bounds.Left >= 180 && bounds.Bottom - bounds.Top >= 180)
+            {
+                windows.Add((hwnd, bounds));
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        if (windows.Count == 0) return;
+
+        int left = int.MaxValue, top = int.MaxValue, right = int.MinValue, bottom = int.MinValue;
+        foreach (var (_, bounds) in windows)
+        {
+            left = Math.Min(left, bounds.Left);
+            top = Math.Min(top, bounds.Top);
+            right = Math.Max(right, bounds.Right);
+            bottom = Math.Max(bottom, bounds.Bottom);
+        }
+
+        int screenW = GetSystemMetrics(SM_CXSCREEN);
+        int screenH = GetSystemMetrics(SM_CYSCREEN);
+        int dx = (screenW - (right - left)) / 2 - left;
+        int dy = (screenH - (bottom - top)) / 2 - top;
+        if (dx == 0 && dy == 0) return;
+
+        foreach (var (hwnd, bounds) in windows)
+        {
+            SetWindowPos(hwnd, IntPtr.Zero, bounds.Left + dx, bounds.Top + dy, 0, 0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+
+    private static bool IsStartHost(IntPtr hwnd)
+    {
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        if (pid == 0) return false;
+
+        IntPtr process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (process == IntPtr.Zero) return false;
+
+        try
+        {
+            var buffer = new StringBuilder(260);
+            int size = buffer.Capacity;
+            if (!QueryFullProcessImageName(process, 0, buffer, ref size)) return false;
+            string file = Path.GetFileName(buffer.ToString());
+            foreach (string host in StartHosts)
+            {
+                if (file.Equals(host, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+
+            return false;
+        }
+        finally
+        {
+            CloseHandle(process);
+        }
+    }
+
+    private static bool TryGetVisibleBounds(IntPtr hwnd, out RECT bounds)
+    {
+        bounds = default;
+        if (!IsWindowVisible(hwnd)) return false;
+        if (DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return false;
+        if (DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out bounds, Marshal.SizeOf<RECT>()) != 0)
+        {
+            if (!GetWindowRect(hwnd, out bounds)) return false;
+        }
+
+        return true;
+    }
+
+    private void SetTaskbarAlignmentCentered()
+    {
+        AppSettings s = _settings.Current;
+        if (!s.StartAlignmentModifiedBySol)
+        {
+            s.OriginalTaskbarAlignment = ReadAlignment();
+            s.StartAlignmentModifiedBySol = true;
+            _settings.Save();
+        }
+
+        if (ReadAlignment() != 1) WriteAlignment(1);
+    }
+
+    private void RestoreStartAlignment()
+    {
+        AppSettings s = _settings.Current;
+        if (!s.StartAlignmentModifiedBySol) return;
+
+        if (ReadAlignment() != s.OriginalTaskbarAlignment) WriteAlignment(s.OriginalTaskbarAlignment);
+        s.StartAlignmentModifiedBySol = false;
+        _settings.Save();
+    }
+
+    private static int? ReadAlignment()
+    {
+        try
+        {
+            using RegistryKey? key = Registry.CurrentUser.OpenSubKey(AdvancedKey);
+            return key?.GetValue(AlignmentValue) is int value ? value : null;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            return null;
+        }
+    }
+
+    private static void WriteAlignment(int? value)
+    {
+        try
+        {
+            using RegistryKey key = Registry.CurrentUser.CreateSubKey(AdvancedKey);
+            if (value is int v) key.SetValue(AlignmentValue, v, RegistryValueKind.DWord);
+            else key.DeleteValue(AlignmentValue, false);
+
+            // Explorer re-reads taskbar settings when this broadcast arrives.
+            SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, UIntPtr.Zero, "TraySettings",
+                SMTO_ABORTIFHUNG, 1000, out _);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
     }
 
     private static IEnumerable<IntPtr> Taskbars()

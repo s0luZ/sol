@@ -18,6 +18,7 @@
 
     <Window.Resources>
         <conv:EnumToBoolConverter x:Key="EnumToBool" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
         <Style x:Key="Page" TargetType="ScrollViewer">
             <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
             <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
@@ -151,6 +152,18 @@
                                             Value="{Binding NotchScale}" />
                                 </StackPanel>
                             </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <Grid>
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Control Centre size" />
+                                        <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding ControlCentreScale, StringFormat={}{0:P0}}" />
+                                    </Grid>
+                                    <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,0" Minimum="0.8" Maximum="1.4"
+                                            Value="{Binding ControlCentreScale}" />
+                                    <TextBlock Style="{StaticResource Sol.Hint}" Text="Click the notch or drag it down to open the Control Centre: Wi-Fi, Bluetooth, sound output, Ethernet, volume, brightness and what's playing." />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
@@ -220,6 +233,20 @@
                                     <TextBlock Style="{StaticResource Sol.Hint}" Text="Hiding the taskbar also hides its system tray icons (Discord, Steam, …). The taskbar always comes back when Sol quits or the dock is turned off." />
                                 </StackPanel>
                             </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Open Start in the middle" />
+                                        <TextBlock Style="{StaticResource Sol.Hint}" Text="The Windows Start menu follows the hidden taskbar and would otherwise open in the corner. Sol slides it to the centre of the screen when you press the dock's Start button (or the Windows key)." />
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" Style="{StaticResource Sol.ToggleSwitch}" IsChecked="{Binding CenterStartMenu}" />
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
@@ -229,6 +256,53 @@
                     <ScrollViewer Style="{StaticResource Page}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource Sol.SectionTitle}" Text="Appearance" />
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Sol.Label}" Text="Theme" />
+                                    <UniformGrid Columns="2" Margin="0,12,0,0">
+                                        <RadioButton Style="{StaticResource Sol.ThemeCard}" GroupName="Theme" Margin="0,0,8,0"
+                                                     IsChecked="{Binding Theme, Converter={StaticResource EnumToBool}, ConverterParameter=Dark}">
+                                            <StackPanel>
+                                                <Border Height="72" CornerRadius="10" Background="#FF0D0D10" BorderBrush="#33FFFFFF" BorderThickness="1" Padding="12,14">
+                                                    <Border Height="22" CornerRadius="8" Background="#F20D0D10" HorizontalAlignment="Center" Width="120">
+                                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource Sol.AccentBrush}" HorizontalAlignment="Left" Margin="10,0,0,0" />
+                                                    </Border>
+                                                </Border>
+                                                <TextBlock Text="Dark" FontWeight="SemiBold" Margin="0,10,0,2" />
+                                                <TextBlock Style="{StaticResource Sol.Hint}" Text="Solid, the default look." Margin="0" />
+                                            </StackPanel>
+                                        </RadioButton>
+                                        <RadioButton Style="{StaticResource Sol.ThemeCard}" GroupName="Theme" Margin="8,0,0,0"
+                                                     IsChecked="{Binding Theme, Converter={StaticResource EnumToBool}, ConverterParameter=Glass}">
+                                            <StackPanel>
+                                                <Border Height="72" CornerRadius="10" BorderBrush="#33FFFFFF" BorderThickness="1" Padding="12,14">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#FF3A5A9A" Offset="0" />
+                                                            <GradientStop Color="#FF0D0D10" Offset="1" />
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <Border Height="22" CornerRadius="8" Background="#B80D0D10" HorizontalAlignment="Center" Width="120" BorderBrush="#33FFFFFF" BorderThickness="1">
+                                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource Sol.AccentBrush}" HorizontalAlignment="Left" Margin="10,0,0,0" />
+                                                    </Border>
+                                                </Border>
+                                                <TextBlock Text="Glass" FontWeight="SemiBold" Margin="0,10,0,2" />
+                                                <TextBlock Style="{StaticResource Sol.Hint}" Text="The Dark bars, see-through." Margin="0" />
+                                            </StackPanel>
+                                        </RadioButton>
+                                    </UniformGrid>
+                                    <TextBlock Style="{StaticResource Sol.Hint}" Text="Dark is solid. Glass is the same look with the wallpaper showing through the bars." />
+                                    <StackPanel Visibility="{Binding IsGlassTheme, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid Margin="0,14,0,0">
+                                            <TextBlock Style="{StaticResource Sol.Label}" Text="Glass tint" />
+                                            <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding GlassOpacity, StringFormat={}{0:P0}}" />
+                                        </Grid>
+                                        <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,0" Minimum="0.4" Maximum="0.95"
+                                                Value="{Binding GlassOpacity}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
 
                             <Border Style="{StaticResource Sol.Card}">
                                 <StackPanel>
@@ -257,12 +331,14 @@
                                         <TextBox Grid.Column="1" Style="{StaticResource Sol.TextBox}" Width="96" VerticalAlignment="Top"
                                                  Text="{Binding SurfaceColor, UpdateSourceTrigger=LostFocus}" />
                                     </Grid>
-                                    <Grid Margin="0,6,0,0">
-                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Opacity" />
-                                        <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding SurfaceOpacity, StringFormat={}{0:P0}}" />
-                                    </Grid>
-                                    <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,0" Minimum="0.5" Maximum="1"
-                                            Value="{Binding SurfaceOpacity}" />
+                                    <StackPanel Visibility="{Binding IsGlassTheme, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}">
+                                        <Grid Margin="0,6,0,0">
+                                            <TextBlock Style="{StaticResource Sol.Label}" Text="Opacity" />
+                                            <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding SurfaceOpacity, StringFormat={}{0:P0}}" />
+                                        </Grid>
+                                        <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,0" Minimum="0.5" Maximum="1"
+                                                Value="{Binding SurfaceOpacity}" />
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
 

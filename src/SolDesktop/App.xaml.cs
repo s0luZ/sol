@@ -31,12 +31,17 @@ public partial class App : Application
     private BluetoothStatusService? _bluetooth;
     private AudioStatusService? _audio;
     private BatteryStatusService? _battery;
+    private WifiService? _wifi;
+    private BrightnessService? _brightness;
+    private MediaService? _media;
     private WindowTracker? _tracker;
     private IconService? _icons;
     private TaskbarService? _taskbar;
 
     private NotchViewModel? _notchViewModel;
     private NotchWindow? _notchWindow;
+    private ControlCentreViewModel? _controlCentreViewModel;
+    private ControlCentreWindow? _controlCentre;
     private DockViewModel? _dockViewModel;
     private DockWindow? _dockWindow;
     private SettingsWindow? _settingsWindow;
@@ -92,12 +97,31 @@ public partial class App : Application
         _bluetooth = new BluetoothStatusService(Dispatcher);
         _audio = new AudioStatusService(Dispatcher);
         _battery = new BatteryStatusService(Dispatcher);
+        _wifi = new WifiService(Dispatcher);
+        _brightness = new BrightnessService();
+        _media = new MediaService(Dispatcher);
         _tracker = new WindowTracker(Dispatcher);
         _icons = new IconService();
         _taskbar = new TaskbarService(_settings);
 
         _notchViewModel = new NotchViewModel(Dispatcher, _network, _bluetooth, _audio, _battery);
         _notchWindow = new NotchWindow { DataContext = _notchViewModel };
+
+        _controlCentreViewModel = new ControlCentreViewModel(Dispatcher, _network, _wifi, _bluetooth, _audio, _brightness, _media);
+        _controlCentre = new ControlCentreWindow(_controlCentreViewModel);
+        _notchWindow.PullStarted += (_, _) =>
+        {
+            _notchWindow.Controller.KeepOpen = true;
+            _controlCentre.BeginPull();
+        };
+        _notchWindow.PullMoved += (_, distance) => _controlCentre.UpdatePull(distance);
+        _notchWindow.PullEnded += (_, _) => _controlCentre.EndPull();
+        _notchWindow.Clicked += (_, _) =>
+        {
+            _notchWindow.Controller.KeepOpen = true;
+            _controlCentre.Toggle();
+        };
+        _controlCentre.PanelClosed += (_, _) => _notchWindow.Controller.KeepOpen = false;
 
         _dockViewModel = new DockViewModel(_tracker, _settings, _icons);
         _dockWindow = new DockWindow(_dockViewModel);
@@ -127,6 +151,8 @@ public partial class App : Application
         if (!background) ShowSettings();
 
         await _bluetooth.InitializeAsync();
+        await _wifi.InitializeAsync();
+        await _media.InitializeAsync();
     }
 
     public void ShowSettings()
@@ -173,8 +199,15 @@ public partial class App : Application
         if (_notchWindow is not null)
         {
             _notchWindow.Controller.Mode = s.NotchMode;
-            if (!s.NotchEnabled) _notchWindow.Hide();
-            else if (!_notchWindow.IsVisible) _notchWindow.Show();
+            if (!s.NotchEnabled)
+            {
+                _notchWindow.Hide();
+                _controlCentre?.ClosePanel();
+            }
+            else if (!_notchWindow.IsVisible)
+            {
+                _notchWindow.Show();
+            }
         }
 
         if (_dockWindow is not null)
@@ -185,7 +218,7 @@ public partial class App : Application
             else if (!_dockWindow.IsVisible) _dockWindow.Show();
         }
 
-        _taskbar?.Apply(s.DockEnabled ? s.TaskbarMode : TaskbarMode.Leave);
+        _taskbar?.Apply(s.DockEnabled ? s.TaskbarMode : TaskbarMode.Leave, s.CenterStartMenu);
         _tray?.Sync(s.NotchEnabled, s.DockEnabled);
         UpdateBarEnvironment();
     }
@@ -232,8 +265,10 @@ public partial class App : Application
         _tray?.Dispose();
         _settingsWindow?.Close();
         _notchWindow?.Close();
+        _controlCentre?.Close();
         _dockWindow?.Close();
         _notchViewModel?.Dispose();
+        _controlCentreViewModel?.Dispose();
         _dockViewModel?.Dispose();
         _tracker?.Dispose();
         _icons?.Dispose();
@@ -241,6 +276,9 @@ public partial class App : Application
         _bluetooth?.Dispose();
         _audio?.Dispose();
         _battery?.Dispose();
+        _wifi?.Dispose();
+        _brightness?.Dispose();
+        _media?.Dispose();
 
         if (_ownsMutex) _singleInstanceMutex?.ReleaseMutex();
         _singleInstanceMutex?.Dispose();
