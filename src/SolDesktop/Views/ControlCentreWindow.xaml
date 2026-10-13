@@ -257,7 +257,7 @@
                 <DropShadowEffect BlurRadius="24" ShadowDepth="4" Direction="270" Opacity="0.5" Color="Black" />
             </controls:FlaredPanel.Effect>
 
-            <StackPanel Width="356">
+            <StackPanel x:Name="Sheet" Width="356" ClipToBounds="True">
                 <StackPanel.LayoutTransform>
                     <ScaleTransform ScaleX="{Binding ControlCentreScale, Source={x:Static vm:Appearance.Current}}"
                                     ScaleY="{Binding ControlCentreScale, Source={x:Static vm:Appearance.Current}}" />

@@ -16,6 +16,28 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <conv:SignalBarOpacityConverter x:Key="SignalBarOpacity" />
 
+        <Style x:Key="Notch.Hit" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="4,3" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Sol.SurfaceHoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="WifiArc" TargetType="Path">
             <Setter Property="Stroke" Value="{DynamicResource Sol.ForegroundBrush}" />
             <Setter Property="StrokeThickness" Value="2.4" />
@@ -33,7 +55,7 @@
                               BorderBrush="{DynamicResource Sol.SurfaceBorderBrush}"
                               CornerRadius="{Binding CornerRadius, Source={x:Static vm:Appearance.Current}}"
                               FlareRadius="{Binding FlareRadius, Source={x:Static vm:Appearance.Current}}"
-                              Cursor="Hand"
+                              Cursor="SizeNS"
                               MouseLeftButtonDown="OnBarMouseDown"
                               MouseMove="OnBarMouseMove"
                               MouseLeftButtonUp="OnBarMouseUp"
@@ -57,6 +79,13 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
+                <!-- Hover grabber: a handle you can drag down into Control Centre. -->
+                <Border x:Name="Grabber" Grid.ColumnSpan="3"
+                        Width="10" Height="3" CornerRadius="1.5"
+                        HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                        Margin="0,0,0,3" Opacity="0" IsHitTestVisible="False"
+                        Background="{DynamicResource Sol.ForegroundDimBrush}" />
+
                 <!-- Left: Sol mark, time, date -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse Width="8" Height="8" Fill="{DynamicResource Sol.AccentBrush}" VerticalAlignment="Center" Margin="0,0,9,0" />
@@ -65,65 +94,75 @@
                                VerticalAlignment="Center" Margin="8,0,0,0" />
                 </StackPanel>
 
-                <!-- Right: status icons -->
+                <!-- Right: status icons — each opens only that control, plus a tray chevron. -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
 
-                    <Viewbox Width="17" Height="17" Margin="6,0"
-                             Visibility="{Binding IsWifiIconVisible, Converter={StaticResource BoolToVisibility}}"
-                             Opacity="{Binding NetworkOpacity}"
-                             ToolTip="{Binding NetworkTooltip}">
-                        <Canvas Width="24" Height="24" Background="Transparent">
-                            <Path Style="{StaticResource WifiArc}" Data="M 9.17,15.17 A 4,4 0 0 1 14.83,15.17"
-                                  Opacity="{Binding WifiBars, Converter={StaticResource SignalBarOpacity}, ConverterParameter=1}" />
-                            <Path Style="{StaticResource WifiArc}" Data="M 6.34,12.34 A 8,8 0 0 1 17.66,12.34"
-                                  Opacity="{Binding WifiBars, Converter={StaticResource SignalBarOpacity}, ConverterParameter=3}" />
-                            <Path Style="{StaticResource WifiArc}" Data="M 3.51,9.51 A 12,12 0 0 1 20.49,9.51"
-                                  Opacity="{Binding WifiBars, Converter={StaticResource SignalBarOpacity}, ConverterParameter=4}" />
-                            <Ellipse Canvas.Left="10.4" Canvas.Top="16.4" Width="3.2" Height="3.2" Fill="{DynamicResource Sol.ForegroundBrush}" />
-                        </Canvas>
-                    </Viewbox>
+                    <Button Style="{StaticResource Notch.Hit}" Click="OnWifiClick"
+                            Visibility="{Binding IsWifiIconVisible, Converter={StaticResource BoolToVisibility}}"
+                            Opacity="{Binding NetworkOpacity}" ToolTip="{Binding NetworkTooltip}">
+                        <Viewbox Width="17" Height="17">
+                            <Canvas Width="24" Height="24" Background="Transparent">
+                                <Path Style="{StaticResource WifiArc}" Data="M 9.17,15.17 A 4,4 0 0 1 14.83,15.17"
+                                      Opacity="{Binding WifiBars, Converter={StaticResource SignalBarOpacity}, ConverterParameter=1}" />
+                                <Path Style="{StaticResource WifiArc}" Data="M 6.34,12.34 A 8,8 0 0 1 17.66,12.34"
+                                      Opacity="{Binding WifiBars, Converter={StaticResource SignalBarOpacity}, ConverterParameter=3}" />
+                                <Path Style="{StaticResource WifiArc}" Data="M 3.51,9.51 A 12,12 0 0 1 20.49,9.51"
+                                      Opacity="{Binding WifiBars, Converter={StaticResource SignalBarOpacity}, ConverterParameter=4}" />
+                                <Ellipse Canvas.Left="10.4" Canvas.Top="16.4" Width="3.2" Height="3.2" Fill="{DynamicResource Sol.ForegroundBrush}" />
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
 
-                    <TextBlock Style="{StaticResource Sol.IconText}" Text="&#xE839;"
-                               Visibility="{Binding IsEthernet, Converter={StaticResource BoolToVisibility}}"
-                               Opacity="{Binding NetworkOpacity}"
-                               ToolTip="{Binding NetworkTooltip}" />
+                    <Button Style="{StaticResource Notch.Hit}" Click="OnEthernetClick"
+                            Visibility="{Binding IsEthernet, Converter={StaticResource BoolToVisibility}}"
+                            Opacity="{Binding NetworkOpacity}" ToolTip="{Binding NetworkTooltip}">
+                        <TextBlock Style="{StaticResource Sol.IconText}" Text="&#xE839;" Margin="0" />
+                    </Button>
 
-                    <TextBlock Style="{StaticResource Sol.IconText}" Text="&#xE702;"
-                               Visibility="{Binding IsBluetoothAvailable, Converter={StaticResource BoolToVisibility}}"
-                               Opacity="{Binding BluetoothOpacity}"
-                               ToolTip="{Binding BluetoothTooltip}" />
+                    <Button Style="{StaticResource Notch.Hit}" Click="OnBluetoothClick"
+                            Visibility="{Binding IsBluetoothAvailable, Converter={StaticResource BoolToVisibility}}"
+                            Opacity="{Binding BluetoothOpacity}" ToolTip="{Binding BluetoothTooltip}">
+                        <TextBlock Style="{StaticResource Sol.IconText}" Text="&#xE702;" Margin="0" />
+                    </Button>
 
-                    <TextBlock Style="{StaticResource Sol.IconText}" Text="{Binding VolumeGlyph}"
-                               ToolTip="{Binding VolumeTooltip}" />
+                    <Button Style="{StaticResource Notch.Hit}" Click="OnSoundClick" ToolTip="{Binding VolumeTooltip}">
+                        <TextBlock Style="{StaticResource Sol.IconText}" Text="{Binding VolumeGlyph}" Margin="0" />
+                    </Button>
 
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,2,0"
-                                Background="Transparent"
-                                ToolTip="{Binding BatteryTooltip}"
-                                Visibility="{Binding HasBattery, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Text="{Binding BatteryPercent, StringFormat={}{0}%}" FontSize="11.5"
-                                   Foreground="{DynamicResource Sol.ForegroundDimBrush}" VerticalAlignment="Center" Margin="0,0,5,0" />
-                        <Grid Width="23" Height="11" VerticalAlignment="Center">
-                            <Border Width="21" HorizontalAlignment="Left" CornerRadius="3"
-                                    BorderBrush="{DynamicResource Sol.ForegroundDimBrush}" BorderThickness="1.2" />
-                            <Border HorizontalAlignment="Left" Margin="3,2.6,0,2.6" CornerRadius="1.5" Width="{Binding BatteryFillWidth}">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="{DynamicResource Sol.ForegroundBrush}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsCharging}" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource Sol.SuccessBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsBatteryLow}" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource Sol.DangerBrush}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                            </Border>
-                            <Border Width="2" Height="5" HorizontalAlignment="Right" CornerRadius="0,1,1,0"
-                                    Background="{DynamicResource Sol.ForegroundDimBrush}" />
-                        </Grid>
-                    </StackPanel>
+                    <Button Style="{StaticResource Notch.Hit}" Click="OnTrayClick" ToolTip="Tray icons">
+                        <TextBlock FontFamily="{StaticResource Sol.IconFont}" Text="&#xE70D;" FontSize="11"
+                                   Foreground="{DynamicResource Sol.ForegroundDimBrush}" />
+                    </Button>
+
+                    <Button Style="{StaticResource Notch.Hit}" Click="OnBatteryClick" Padding="6,3"
+                            ToolTip="{Binding BatteryTooltip}"
+                            Visibility="{Binding HasBattery, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding BatteryPercent, StringFormat={}{0}%}" FontSize="11.5"
+                                       Foreground="{DynamicResource Sol.ForegroundDimBrush}" VerticalAlignment="Center" Margin="0,0,5,0" />
+                            <Grid Width="23" Height="11" VerticalAlignment="Center">
+                                <Border Width="21" HorizontalAlignment="Left" CornerRadius="3"
+                                        BorderBrush="{DynamicResource Sol.ForegroundDimBrush}" BorderThickness="1.2" />
+                                <Border HorizontalAlignment="Left" Margin="3,2.6,0,2.6" CornerRadius="1.5" Width="{Binding BatteryFillWidth}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="{DynamicResource Sol.ForegroundBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCharging}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource Sol.SuccessBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsBatteryLow}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource Sol.DangerBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                </Border>
+                                <Border Width="2" Height="5" HorizontalAlignment="Right" CornerRadius="0,1,1,0"
+                                        Background="{DynamicResource Sol.ForegroundDimBrush}" />
+                            </Grid>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </controls:FlaredPanel>

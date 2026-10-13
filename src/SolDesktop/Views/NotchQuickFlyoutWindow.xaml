@@ -1,0 +1,344 @@
+<Window x:Class="SolDesktop.Views.NotchQuickFlyoutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:SolDesktop.Converters"
+        xmlns:vm="clr-namespace:SolDesktop.ViewModels"
+        Title="Sol Quick"
+        SizeToContent="WidthAndHeight"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        FontFamily="{DynamicResource Sol.TextFont}"
+        Foreground="{DynamicResource Sol.ForegroundBrush}"
+        PreviewKeyDown="OnPreviewKeyDown">
+
+    <Window.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+        <conv:NullToVisibilityConverter x:Key="NullToVisibility" />
+        <conv:SignalBarOpacityConverter x:Key="SignalBarOpacity" />
+
+        <Style x:Key="CC.Tile" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Sol.SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Sol.SurfaceBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="12" />
+        </Style>
+        <Style x:Key="CC.Detail" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource Sol.ForegroundDimBrush}" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style x:Key="CC.Glyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource Sol.IconFont}" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="CC.Row" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Foreground" Value="{DynamicResource Sol.ForegroundBrush}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="12" Padding="{TemplateBinding Padding}" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Sol.SurfaceHoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CC.Pill" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Foreground" Value="{DynamicResource Sol.ForegroundBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="14" Padding="{TemplateBinding Padding}"
+                                Background="{DynamicResource Sol.SurfaceHoverBrush}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CC.IconPill" TargetType="Button" BasedOn="{StaticResource CC.Pill}">
+            <Setter Property="FontFamily" Value="{StaticResource Sol.IconFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style x:Key="CC.LevelRepeat" TargetType="RepeatButton">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Background="{TemplateBinding Background}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CC.Level" TargetType="Slider">
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="100" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid>
+                            <Border x:Name="Mask" CornerRadius="15" Background="White" />
+                            <Grid>
+                                <Grid.OpacityMask>
+                                    <VisualBrush Visual="{Binding ElementName=Mask}" />
+                                </Grid.OpacityMask>
+                                <Border Background="{DynamicResource Sol.SurfaceHoverBrush}" />
+                                <Track x:Name="PART_Track">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Style="{StaticResource CC.LevelRepeat}" Background="{DynamicResource Sol.ForegroundBrush}" />
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Style="{StaticResource CC.LevelRepeat}" Background="Transparent" />
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Width="0" Height="30" Opacity="0" />
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CC.Password" TargetType="PasswordBox">
+            <Setter Property="Foreground" Value="{DynamicResource Sol.ForegroundBrush}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource Sol.ForegroundBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                        <Border x:Name="Bd" Padding="10,6" CornerRadius="12" BorderThickness="1"
+                                Background="{DynamicResource Sol.SurfaceHoverBrush}" BorderBrush="Transparent">
+                            <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="WifiArc" TargetType="Path">
+            <Setter Property="Stroke" Value="{DynamicResource Sol.ForegroundBrush}" />
+            <Setter Property="StrokeThickness" Value="2.4" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+        </Style>
+        <DataTemplate x:Key="WifiBarsGlyph">
+            <Viewbox Width="18" Height="18">
+                <Canvas Width="24" Height="24">
+                    <Path Style="{StaticResource WifiArc}" Data="M 9.17,15.17 A 4,4 0 0 1 14.83,15.17"
+                          Opacity="{Binding Converter={StaticResource SignalBarOpacity}, ConverterParameter=1}" />
+                    <Path Style="{StaticResource WifiArc}" Data="M 6.34,12.34 A 8,8 0 0 1 17.66,12.34"
+                          Opacity="{Binding Converter={StaticResource SignalBarOpacity}, ConverterParameter=3}" />
+                    <Path Style="{StaticResource WifiArc}" Data="M 3.51,9.51 A 12,12 0 0 1 20.49,9.51"
+                          Opacity="{Binding Converter={StaticResource SignalBarOpacity}, ConverterParameter=4}" />
+                    <Ellipse Canvas.Left="10.4" Canvas.Top="16.4" Width="3.2" Height="3.2" Fill="{DynamicResource Sol.ForegroundBrush}" />
+                </Canvas>
+            </Viewbox>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Border Width="340" MaxHeight="460" Padding="16,14" CornerRadius="20" BorderThickness="1"
+            Background="{DynamicResource Sol.SurfaceSolidBrush}"
+            BorderBrush="{DynamicResource Sol.SurfaceBorderBrush}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="8" Direction="270" Opacity="0.45" Color="Black" />
+        </Border.Effect>
+
+        <StackPanel>
+            <TextBlock x:Name="TitleText" FontSize="16" FontWeight="SemiBold" Margin="2,0,0,12" />
+
+            <!-- Sound -->
+            <StackPanel x:Name="SoundPanel" Visibility="Collapsed">
+                <Border Style="{StaticResource CC.Tile}" Padding="8" Margin="0,0,0,10"
+                        Visibility="{Binding HasAudioDevice, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Style="{StaticResource CC.IconPill}" Content="{Binding VolumeGlyph}" Background="Transparent"
+                                Command="{Binding ToggleMuteCommand}" ToolTip="Mute" />
+                        <Slider Grid.Column="1" Style="{StaticResource CC.Level}" Margin="8,0,2,0"
+                                Value="{Binding Volume, Mode=TwoWay}"
+                                PreviewMouseLeftButtonDown="OnLevelMouseDown" PreviewMouseMove="OnLevelMouseMove"
+                                PreviewMouseLeftButtonUp="OnLevelMouseUp" MouseWheel="OnLevelWheel" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource CC.Tile}" Padding="4">
+                    <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding OutputDevices}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource CC.Row}"
+                                            Command="{Binding DataContext.SelectOutputCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource CC.Glyph}" Text="&#xE7F5;" Width="18" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13" Margin="12,0"
+                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource CC.Glyph}" Text="&#xE73E;" FontSize="13"
+                                                       Foreground="{DynamicResource Sol.AccentBrush}"
+                                                       Visibility="{Binding IsDefault, Converter={StaticResource BoolToVisibility}}" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </StackPanel>
+
+            <!-- Wi-Fi -->
+            <StackPanel x:Name="WifiPanel" Visibility="Collapsed">
+                <Grid Margin="0,0,0,10">
+                    <TextBlock Text="{Binding WifiStatus}" Style="{StaticResource CC.Detail}" VerticalAlignment="Center" />
+                    <CheckBox HorizontalAlignment="Right" Style="{StaticResource Sol.ToggleSwitch}"
+                              IsChecked="{Binding IsWifiOn, Mode=OneWay}" IsEnabled="{Binding IsWifiAvailable}"
+                              Command="{Binding ToggleWifiCommand}" />
+                </Grid>
+                <Border Style="{StaticResource CC.Tile}" Padding="4">
+                    <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding IsWifiOn, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl ItemsSource="{Binding WifiNetworks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:WifiNetworkItem}">
+                                    <StackPanel>
+                                        <Button Style="{StaticResource CC.Row}"
+                                                Command="{Binding DataContext.SelectNetworkCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <ContentControl Content="{Binding SignalBars}" ContentTemplate="{StaticResource WifiBarsGlyph}" />
+                                                <StackPanel Grid.Column="1" Margin="12,0">
+                                                    <TextBlock Text="{Binding Ssid}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Style="{StaticResource CC.Detail}" Text="{Binding Detail}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                        <Grid Margin="40,2,10,8" Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
+                                            <Grid Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <PasswordBox x:Name="JoinBox" Style="{StaticResource CC.Password}"
+                                                             Visibility="{Binding NeedsPassword, Converter={StaticResource BoolToVisibility}}"
+                                                             KeyDown="OnPasswordKeyDown" />
+                                                <Button Grid.Column="1" Style="{StaticResource CC.Pill}" Content="Join" Margin="8,0,0,0"
+                                                        Tag="{Binding ElementName=JoinBox}" Click="OnJoinClick" />
+                                            </Grid>
+                                        </Grid>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </StackPanel>
+
+            <!-- Bluetooth -->
+            <StackPanel x:Name="BluetoothPanel" Visibility="Collapsed">
+                <Grid Margin="0,0,0,10">
+                    <TextBlock Text="{Binding BluetoothStatus}" Style="{StaticResource CC.Detail}" VerticalAlignment="Center" />
+                    <CheckBox HorizontalAlignment="Right" Style="{StaticResource Sol.ToggleSwitch}"
+                              IsChecked="{Binding IsBluetoothOn, Mode=OneWay}" IsEnabled="{Binding IsBluetoothAvailable}"
+                              Command="{Binding ToggleBluetoothCommand}" />
+                </Grid>
+                <Border Style="{StaticResource CC.Tile}" Padding="4">
+                    <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding BluetoothDevices}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource CC.Row}"
+                                            Command="{Binding DataContext.OpenBluetoothSettingsCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource CC.Glyph}" Text="&#xE702;" Width="18" />
+                                            <StackPanel Grid.Column="1" Margin="12,0">
+                                                <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource CC.Detail}" Text="{Binding Detail}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </StackPanel>
+
+            <!-- Ethernet -->
+            <StackPanel x:Name="EthernetPanel" Visibility="Collapsed">
+                <ItemsControl ItemsSource="{Binding EthernetAdapters}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CC.Tile}" Margin="0,0,0,8" Padding="12">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                    <ItemsControl ItemsSource="{Binding Details}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,3">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="90" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource Sol.ForegroundDimBrush}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12" TextWrapping="Wrap" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Battery -->
+            <StackPanel x:Name="BatteryPanel" Visibility="Collapsed">
+                <Border Style="{StaticResource CC.Tile}">
+                    <StackPanel>
+                        <TextBlock x:Name="BatteryPercentText" FontSize="28" FontWeight="SemiBold" />
+                        <TextBlock x:Name="BatteryDetailText" Style="{StaticResource CC.Detail}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

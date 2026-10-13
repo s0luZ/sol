@@ -39,6 +39,24 @@
 
                     <Border Background="{DynamicResource Sol.SurfaceHoverBrush}"
                             CornerRadius="{Binding DockTileCornerRadius, Source={x:Static vm:Appearance.Current}}"
+                            Visibility="{Binding IsFolder, Converter={StaticResource Visible}}">
+                        <Grid>
+                            <TextBlock FontFamily="{StaticResource Sol.IconFont}" Text="&#xE8B7;"
+                                       FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Sol.ForegroundDimBrush}"
+                                       Visibility="{Binding FolderHasIcons, Converter={StaticResource Visible}, ConverterParameter=Invert}" />
+                            <UniformGrid Rows="2" Columns="2" Margin="5"
+                                         Visibility="{Binding FolderHasIcons, Converter={StaticResource Visible}}">
+                                <Image Source="{Binding FolderIcon0}" Margin="1" RenderOptions.BitmapScalingMode="HighQuality" />
+                                <Image Source="{Binding FolderIcon1}" Margin="1" RenderOptions.BitmapScalingMode="HighQuality" />
+                                <Image Source="{Binding FolderIcon2}" Margin="1" RenderOptions.BitmapScalingMode="HighQuality" />
+                                <Image Source="{Binding FolderIcon3}" Margin="1" RenderOptions.BitmapScalingMode="HighQuality" />
+                            </UniformGrid>
+                        </Grid>
+                    </Border>
+
+                    <Border Background="{DynamicResource Sol.SurfaceHoverBrush}"
+                            CornerRadius="{Binding DockTileCornerRadius, Source={x:Static vm:Appearance.Current}}"
                             Visibility="{Binding IsStart, Converter={StaticResource Visible}}">
                         <Viewbox Margin="12">
                             <Canvas Width="20" Height="20">

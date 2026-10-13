@@ -58,8 +58,11 @@ public sealed class AppSettings
     public TaskbarMode TaskbarMode { get; set; } = TaskbarMode.Hide;
     public bool CenterStartMenu { get; set; } = true;
 
-    /// <summary>Shortcut paths, exe paths or shell:AppsFolder\&lt;AppUserModelID&gt; entries. Null until first import.</summary>
+    /// <summary>Shortcut paths, exe paths or shell:AppsFolder\&lt;AppUserModelID&gt; entries. Null until first import.
+    /// Folder pins are stored as <c>folder:{id}</c>.</summary>
     public List<string>? PinnedApps { get; set; }
+
+    public List<DockFolder> Folders { get; set; } = new();
 
     public ThemeKind Theme { get; set; } = ThemeKind.Dark;
     public double GlassOpacity { get; set; } = 0.72;
@@ -77,6 +80,13 @@ public sealed class AppSettings
 
     /// <summary>Original HKCU TaskbarAl value (0 = left, 1 = centre); null when the value didn't exist.</summary>
     public int? OriginalTaskbarAlignment { get; set; }
+}
+
+public sealed class DockFolder
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = "Folder";
+    public List<string> Apps { get; set; } = new();
 }
 
 public sealed class SettingsService
@@ -118,6 +128,7 @@ public sealed class SettingsService
         // Old glass used a 35% grey blur window. The new look is Dark at ~72% opacity.
         if (Math.Abs(Current.GlassOpacity - 0.35) < 0.001) Current.GlassOpacity = 0.72;
 
+        Current.Folders ??= new List<DockFolder>();
         Current.Version = AppSettings.CurrentVersion;
     }
 

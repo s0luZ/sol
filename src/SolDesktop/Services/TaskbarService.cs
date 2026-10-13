@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using static SolDesktop.Interop.NativeMethods;
 
@@ -27,19 +28,33 @@ public sealed class TaskbarService
     };
 
     private readonly SettingsService _settings;
+    private readonly Dispatcher _dispatcher;
+    private readonly DispatcherTimer _startPoll;
     private readonly WinEventDelegate _showHookProc;
     private readonly WinEventDelegate _foregroundHookProc;
+    private readonly LowLevelMouseProc _keyboardProc;
     private IntPtr _showHook;
     private IntPtr _foregroundHook;
+    private IntPtr _keyboardHook;
     private (TaskbarMode Mode, bool CenterStart)? _applied;
     private int _centerGeneration;
+    private volatile bool _startVisible;
+    private volatile bool _winHeld;
+    private int _goneTicks;
 
     public TaskbarService(SettingsService settings)
     {
         _settings = settings;
+        _dispatcher = Dispatcher.CurrentDispatcher;
         _showHookProc = OnWindowShown;
         _foregroundHookProc = OnForegroundChanged;
+        _keyboardProc = OnKeyboard;
+        _startPoll = new DispatcherTimer(DispatcherPriority.Background, _dispatcher) { Interval = TimeSpan.FromMilliseconds(80) };
+        _startPoll.Tick += (_, _) => PollStart();
     }
+
+    /// <summary>True while the Start menu (or Search/Phone flyout) is on screen.</summary>
+    public event EventHandler<bool>? StartVisibilityChanged;
 
     public void Apply(TaskbarMode mode, bool centerStart)
     {
@@ -62,9 +77,11 @@ public sealed class TaskbarService
         // Auto-hide frees the reserved work area so maximized windows reach the bottom edge.
         SetAutoHide(true);
         SetTaskbarsVisible(mode != TaskbarMode.Hide);
-        // Hide the taskbar as soon as Explorer flashes it (Start, flyouts). Also watch for Start
-        // itself so we can slide it to the middle of the screen.
-        SetShowHook(mode == TaskbarMode.Hide || centerStart);
+        // Hide the taskbar as soon as Explorer flashes it (Start, flyouts). Watch the Win key
+        // and Start itself so the dock can rise into the gap under the menu.
+        SetShowHook(true);
+        SetKeyboardHook(true);
+        _startPoll.Start();
 
         // TaskbarAl helps when the bar is only auto-hidden. A fully hidden bar ignores it, so
         // CenterStartWindows() also moves the Start window after it appears.
@@ -84,7 +101,10 @@ public sealed class TaskbarService
     {
         _applied = (TaskbarMode.Leave, false);
         Interlocked.Increment(ref _centerGeneration);
+        _startPoll.Stop();
+        SetKeyboardHook(false);
         SetShowHook(false);
+        PublishStart(false);
         RestoreStartAlignment();
 
         AppSettings s = _settings.Current;
@@ -121,10 +141,71 @@ public sealed class TaskbarService
         }
     }
 
+    private void SetKeyboardHook(bool enabled)
+    {
+        if (enabled && _keyboardHook == IntPtr.Zero)
+        {
+            _keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, _keyboardProc, GetModuleHandle(null), 0);
+        }
+        else if (!enabled && _keyboardHook != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(_keyboardHook);
+            _keyboardHook = IntPtr.Zero;
+            _winHeld = false;
+        }
+    }
+
+    private IntPtr OnKeyboard(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0)
+        {
+            int msg = wParam.ToInt32();
+            var info = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+            if (info.vkCode is VK_LWIN or VK_RWIN)
+            {
+                if (msg is WM_KEYDOWN or WM_SYSKEYDOWN)
+                {
+                    _winHeld = true;
+                    _goneTicks = 0;
+                    PublishStart(true);
+                }
+                else if (msg is WM_KEYUP or WM_SYSKEYUP)
+                {
+                    _winHeld = false;
+                }
+            }
+        }
+
+        return CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
+    }
+
+    private void PollStart()
+    {
+        bool startOpen = StartIsVisible();
+        if (startOpen)
+        {
+            _goneTicks = 0;
+            PublishStart(true);
+            return;
+        }
+
+        if (_winHeld) return;
+
+        _goneTicks++;
+        if (_goneTicks >= 4) PublishStart(false);
+    }
+
+    private void PublishStart(bool visible)
+    {
+        if (_startVisible == visible) return;
+        _startVisible = visible;
+        StartVisibilityChanged?.Invoke(this, visible);
+    }
+
     private void OnForegroundChanged(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
     {
         if (idObject != 0 || idChild != 0) return;
-        if (_applied?.CenterStart == true && IsStartHost(hwnd)) ScheduleCenterStart();
+        if (IsStartHost(hwnd)) ScheduleCenterStart();
     }
 
     private void OnWindowShown(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
@@ -141,7 +222,7 @@ public sealed class TaskbarService
         }
 
         if (idObject != 0 || idChild != 0) return;
-        if (_applied.Value.CenterStart && IsStartHost(hwnd)) ScheduleCenterStart();
+        if (IsStartHost(hwnd)) ScheduleCenterStart();
     }
 
     private bool StartIsVisible()
@@ -150,7 +231,7 @@ public sealed class TaskbarService
         EnumWindows((hwnd, _) =>
         {
             if (IsStartHost(hwnd) && TryGetVisibleBounds(hwnd, out RECT bounds) &&
-                bounds.Right - bounds.Left >= 180 && bounds.Bottom - bounds.Top >= 180)
+                bounds.Right - bounds.Left >= 80 && bounds.Bottom - bounds.Top >= 80)
             {
                 found = true;
                 return false;
@@ -191,7 +272,7 @@ public sealed class TaskbarService
         EnumWindows((hwnd, _) =>
         {
             if (IsStartHost(hwnd) && TryGetVisibleBounds(hwnd, out RECT bounds) &&
-                bounds.Right - bounds.Left >= 180 && bounds.Bottom - bounds.Top >= 180)
+                bounds.Right - bounds.Left >= 80 && bounds.Bottom - bounds.Top >= 80)
             {
                 windows.Add((hwnd, bounds));
             }

@@ -1,0 +1,94 @@
+<Window x:Class="SolDesktop.Views.FolderFlyoutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:SolDesktop.Converters"
+        Title="Sol Folder"
+        WindowStyle="None" AllowsTransparency="True" Background="#99000000"
+        ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        FontFamily="{DynamicResource Sol.TextFont}"
+        Foreground="{DynamicResource Sol.ForegroundBrush}"
+        PreviewKeyDown="OnPreviewKeyDown"
+        MouseLeftButtonDown="OnBackdropClick">
+
+    <Window.Resources>
+        <conv:BoolToVisibilityConverter x:Key="Visible" />
+    </Window.Resources>
+
+    <Grid>
+        <Border x:Name="Panel" HorizontalAlignment="Center" VerticalAlignment="Center"
+                MinWidth="420" MaxWidth="640" MaxHeight="520"
+                Padding="22,18,22,20" CornerRadius="24" BorderThickness="1"
+                Background="{DynamicResource Sol.SurfaceSolidBrush}"
+                BorderBrush="{DynamicResource Sol.SurfaceBorderBrush}"
+                AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver"
+                MouseLeftButtonDown="OnPanelClick">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="40" ShadowDepth="10" Direction="270" Opacity="0.5" Color="Black" />
+            </Border.Effect>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Margin="4,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock x:Name="TitleText" FontSize="22" FontWeight="SemiBold" />
+                        <TextBlock Text="Drop apps here · click to open" FontSize="12"
+                                   Foreground="{DynamicResource Sol.ForegroundDimBrush}" Margin="0,4,0,0" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource Sol.IconButton}" Content="&#xE8BB;"
+                            FontSize="12" Width="28" Height="28" Click="OnCloseClick" ToolTip="Close" />
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Grid>
+                        <TextBlock x:Name="EmptyHint" Text="This folder is empty. Drop Steam, games or any app onto it."
+                                   FontSize="13" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{DynamicResource Sol.ForegroundDimBrush}"
+                                   VerticalAlignment="Center" Margin="24,36"
+                                   Visibility="Collapsed" />
+
+                        <ItemsControl x:Name="Apps">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel HorizontalAlignment="Center" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="96" Padding="10,12,10,8" Margin="6" CornerRadius="16"
+                                            Background="Transparent" Cursor="Hand"
+                                            MouseLeftButtonUp="OnAppClick"
+                                            MouseRightButtonUp="OnAppRightClick">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource Sol.SurfaceHoverBrush}" />
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel>
+                                            <Image Source="{Binding Icon}" Width="48" Height="48"
+                                                   HorizontalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                                            <TextBlock Text="{Binding Name}" FontSize="11.5" TextAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" Margin="0,8,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

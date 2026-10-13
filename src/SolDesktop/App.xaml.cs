@@ -47,6 +47,8 @@ public partial class App : Application
     private SettingsWindow? _settingsWindow;
     private SettingsViewModel? _settingsViewModel;
     private TrayIconService? _tray;
+    private OverflowTrayWindow? _overflow;
+    private NotchQuickFlyoutWindow? _quick;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -109,22 +111,64 @@ public partial class App : Application
 
         _controlCentreViewModel = new ControlCentreViewModel(Dispatcher, _network, _wifi, _bluetooth, _audio, _brightness, _media);
         _controlCentre = new ControlCentreWindow(_controlCentreViewModel);
-        _notchWindow.PullStarted += (_, _) =>
+        _overflow = new OverflowTrayWindow(_icons);
+        _quick = new NotchQuickFlyoutWindow(_controlCentreViewModel);
+        _overflow.ClosedFlyout += (_, _) => ReleaseNotchHold();
+        _quick.ClosedFlyout += (_, _) => ReleaseNotchHold();
+        _notchWindow.QuickRequested += (_, args) =>
         {
             _notchWindow.Controller.KeepOpen = true;
-            _controlCentre.BeginPull();
+            if (args.Kind == NotchQuickKind.Tray)
+            {
+                _quick.HideFlyout();
+                _overflow.ShowBelow(args.Anchor.X, args.Anchor.Y);
+            }
+            else
+            {
+                _overflow.HideFlyout();
+                _quick.ShowFor(args.Kind, _notchViewModel, args.Anchor.X, args.Anchor.Y);
+            }
+
+            _notchWindow.Controller.KeepOpen = true;
+        };
+
+        _notchWindow.PullStarted += (_, _) =>
+        {
+            HideNotchFlyouts();
+            _notchWindow.Controller.KeepOpen = true;
+            _controlCentre.BeginPull(_notchWindow.GetBarSize());
+            _notchWindow.Cover();
         };
         _notchWindow.PullMoved += (_, distance) => _controlCentre.UpdatePull(distance);
         _notchWindow.PullEnded += (_, _) => _controlCentre.EndPull();
         _notchWindow.Clicked += (_, _) =>
         {
+            HideNotchFlyouts();
             _notchWindow.Controller.KeepOpen = true;
-            _controlCentre.Toggle();
+            _controlCentre.Toggle(_notchWindow.GetBarSize());
+            if (_controlCentre.IsOpen) _notchWindow.Cover();
         };
-        _controlCentre.PanelClosed += (_, _) => _notchWindow.Controller.KeepOpen = false;
+        _controlCentre.PanelClosed += (_, _) =>
+        {
+            _notchWindow.Uncover();
+            ReleaseNotchHold();
+        };
 
         _dockViewModel = new DockViewModel(_tracker, _settings, _icons);
-        _dockWindow = new DockWindow(_dockViewModel);
+        _dockWindow = new DockWindow(_dockViewModel, _icons);
+        _taskbar.StartVisibilityChanged += (_, visible) =>
+        {
+            void Apply()
+            {
+                if (_dockWindow is null) return;
+                bool hold = visible && _settings.Current.DockEnabled;
+                _dockWindow.Controller.StartHold = hold;
+                if (hold) _dockWindow.RaiseAbove();
+            }
+
+            if (Dispatcher.CheckAccess()) Apply();
+            else Dispatcher.Invoke(Apply);
+        };
 
         _tray = new TrayIconService();
         _tray.SettingsRequested += (_, _) => ShowSettings();
@@ -208,6 +252,8 @@ public partial class App : Application
             {
                 _notchWindow.Show();
             }
+
+            if (_controlCentre is { IsOpen: true }) _notchWindow.Cover();
         }
 
         if (_dockWindow is not null)
@@ -245,6 +291,25 @@ public partial class App : Application
         }
     }
 
+    private void HideNotchFlyouts()
+    {
+        _overflow?.HideFlyout();
+        _quick?.HideFlyout();
+    }
+
+    private void ReleaseNotchHold()
+    {
+        if (_notchWindow is null) return;
+        if (_controlCentre is { IsOpen: true }) return;
+        if (_overflow is { IsVisible: true } || _quick is { IsVisible: true })
+        {
+            _notchWindow.Controller.KeepOpen = true;
+            return;
+        }
+
+        _notchWindow.Controller.KeepOpen = false;
+    }
+
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         // A background shell app should survive a single bad event rather than vanish.
@@ -264,6 +329,8 @@ public partial class App : Application
 
         _tray?.Dispose();
         _settingsWindow?.Close();
+        _overflow?.Close();
+        _quick?.Close();
         _notchWindow?.Close();
         _controlCentre?.Close();
         _dockWindow?.Close();

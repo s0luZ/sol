@@ -25,6 +25,7 @@ public partial class DockWindow : Window
 
     private readonly DockViewModel _vm;
     private readonly WindowPreviewWindow _preview = new();
+    private readonly FolderFlyoutWindow _folderFlyout;
     private readonly DispatcherTimer _hoverTimer;
     private readonly DispatcherTimer _previewTracker;
     private readonly Dictionary<ContentPresenter, double> _scales = new();
@@ -38,13 +39,18 @@ public partial class DockWindow : Window
     private bool _dragging;
     private ContentPresenter? _previewAnchor;
     private int _previewOutsideTicks;
+    private bool _menuHold;
+    private bool _flyoutHold;
 
-    public DockWindow(DockViewModel vm)
+    public DockWindow(DockViewModel vm, IconService icons)
     {
         InitializeComponent();
         _vm = vm;
         DataContext = vm;
         Controller = new EdgeBarController(Bar, Slide, ScreenEdge.Bottom);
+        _folderFlyout = new FolderFlyoutWindow(vm, icons);
+        _folderFlyout.ClosedFlyout += (_, _) => { _flyoutHold = false; SyncHold(); };
+        vm.FolderRequested += (_, item) => ShowFolder(item);
 
         _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         _hoverTimer.Tick += OnHoverTimer;
@@ -71,6 +77,15 @@ public partial class DockWindow : Window
     }
 
     public EdgeBarController Controller { get; }
+
+    /// <summary>Re-assert topmost so the dock sits in front of Start after Win is pressed.</summary>
+    public void RaiseAbove()
+    {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+    }
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -105,8 +120,12 @@ public partial class DockWindow : Window
     public new void Hide()
     {
         HidePreview();
+        _folderFlyout.HideFlyout();
         base.Hide();
     }
+
+    private void SyncHold() =>
+        Controller.KeepOpen = _menuHold || _flyoutHold || _preview.IsVisible;
 
     // ---- magnification ----
 
@@ -227,9 +246,17 @@ public partial class DockWindow : Window
 
         if (_dragging)
         {
+            DockItemViewModel? dragged = pressed;
             _dragging = false;
             Items.ReleaseMouseCapture();
             _vm.SuspendRebuild = false;
+
+            if (dragged is { IsApp: true } app && _hoverItem is { IsFolder: true } folder)
+            {
+                _vm.MoveAppToFolder(app, folder);
+                return;
+            }
+
             _vm.CommitPinnedOrder();
             _vm.Rebuild();
             return;
@@ -326,7 +353,29 @@ public partial class DockWindow : Window
 
     private void OnDrop(object sender, DragEventArgs e)
     {
-        if (e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0) _vm.PinPaths(files);
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files || files.Length == 0) return;
+        if (ItemAt(e.GetPosition(Items)) is { IsFolder: true } folder) _vm.AddPathsToFolder(folder, files);
+        else _vm.PinPaths(files);
+    }
+
+    private DockItemViewModel? ItemAt(Point inItems)
+    {
+        DockItemViewModel? best = null;
+        double bestDistance = double.MaxValue;
+        for (int i = 0; i < Items.Items.Count; i++)
+        {
+            if (Items.Items[i] is not DockItemViewModel item || item.IsSeparator) continue;
+            if (Items.ItemContainerGenerator.ContainerFromIndex(i) is not ContentPresenter container) continue;
+            double center = container.TranslatePoint(new Point(container.ActualWidth / 2, 0), Items).X;
+            double distance = Math.Abs(inItems.X - center);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = item;
+            }
+        }
+
+        return bestDistance < Appearance.Current.DockIconSize ? best : null;
     }
 
     // ---- context menus ----
@@ -347,11 +396,29 @@ public partial class DockWindow : Window
                 entries.Add((item.IsRunning ? "New window" : "Open", () => _vm.Launch(item)));
                 entries.Add((item.IsPinned ? "Unpin from dock" : "Pin to dock",
                     item.IsPinned ? () => _vm.Unpin(item) : () => _vm.Pin(item)));
+                if (_vm.FolderList.Count > 0) entries.Add((null, null));
+                foreach (DockFolder folder in _vm.FolderList)
+                {
+                    entries.Add(($"Add to {folder.Name}", () =>
+                    {
+                        var pin = Items.Items.OfType<DockItemViewModel>().FirstOrDefault(i => i.FolderId == folder.Id);
+                        if (pin is not null) _vm.AddToFolder(pin, item.LaunchTarget ?? item.ExePath ?? "");
+                    }));
+                }
+
+                entries.Add(("Add to new folder…", () => PromptNewFolder(item.LaunchTarget ?? item.ExePath)));
                 if (item.IsRunning)
                 {
                     entries.Add((null, null));
                     entries.Add((item.Windows.Count > 1 ? $"Close all {item.Windows.Count} windows" : "Close window", () => _vm.CloseAll(item)));
                 }
+                break;
+            case DockItemKind.Folder:
+                entries.Add((item.Name, null));
+                entries.Add((null, null));
+                entries.Add(("Open", () => ShowFolder(item)));
+                entries.Add(("Rename…", () => PromptRenameFolder(item)));
+                entries.Add(("Remove folder", () => _vm.DeleteFolder(item)));
                 break;
             case DockItemKind.RecycleBin:
                 entries.Add(("Open", _vm.OpenRecycleBin));
@@ -371,6 +438,8 @@ public partial class DockWindow : Window
     {
         var app = (App)Application.Current;
         ShowMenu(MenuFactory.Create(
+            ("New folder…", () => PromptNewFolder(null)),
+            (null, null),
             ("Sol settings…", app.ShowSettings),
             ("Hide dock", () => app.ModifySettings(s => s.DockEnabled = false)),
             (null, null),
@@ -380,8 +449,39 @@ public partial class DockWindow : Window
 
     private void ShowMenu(ContextMenu menu, UIElement target)
     {
-        Controller.KeepOpen = true;
-        MenuFactory.Open(menu, target, PlacementMode.Top, () => Controller.KeepOpen = false);
+        _menuHold = true;
+        SyncHold();
+        MenuFactory.Open(menu, target, PlacementMode.Top, () =>
+        {
+            _menuHold = false;
+            SyncHold();
+        });
+    }
+
+    private void PromptNewFolder(string? firstApp)
+    {
+        var prompt = new NamePromptWindow("New folder", "Games");
+        if (prompt.ShowDialog() != true) return;
+        DockFolder folder = _vm.CreateFolder(prompt.Result);
+        if (firstApp is not null)
+        {
+            DockItemViewModel? item = Items.Items.OfType<DockItemViewModel>().FirstOrDefault(i => i.FolderId == folder.Id);
+            if (item is not null) _vm.AddToFolder(item, firstApp);
+        }
+    }
+
+    private void PromptRenameFolder(DockItemViewModel item)
+    {
+        var prompt = new NamePromptWindow("Rename folder", item.Name, "Rename");
+        if (prompt.ShowDialog() == true) _vm.RenameFolder(item, prompt.Result);
+    }
+
+    private void ShowFolder(DockItemViewModel item)
+    {
+        HidePreview();
+        _flyoutHold = true;
+        SyncHold();
+        _folderFlyout.ShowFor(item);
     }
 
     // ---- window previews ----
@@ -407,7 +507,7 @@ public partial class DockWindow : Window
         _previewAnchor = container;
         _previewOutsideTicks = 0;
         _preview.ShowFor(item, center.X, barTop.Y);
-        Controller.KeepOpen = true;
+        SyncHold();
         _previewTracker.Start();
     }
 
@@ -417,7 +517,7 @@ public partial class DockWindow : Window
         if (!_preview.IsVisible) return;
         _preview.HideAndClear();
         _previewAnchor = null;
-        Controller.KeepOpen = false;
+        SyncHold();
     }
 
     private void RefreshPreview()
@@ -474,6 +574,7 @@ public partial class DockWindow : Window
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         CompositionTarget.Rendering -= OnRendering;
         _preview.Close();
+        _folderFlyout.Close();
         base.OnClosed(e);
     }
 }

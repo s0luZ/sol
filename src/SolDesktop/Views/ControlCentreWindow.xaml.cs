@@ -13,23 +13,31 @@ using SolDesktop.ViewModels;
 namespace SolDesktop.Views;
 
 /// <summary>
-/// The pull-down panel. It follows the pointer while the notch is dragged, then snaps open
-/// or closed; it takes focus while open (for the Wi-Fi password box) and closes on deactivation.
+/// The pull-down panel. It morphs out of the notch — same flared bar, growing from notch
+/// size into the full Control Centre — then snaps open or closed.
 /// </summary>
 public partial class ControlCentreWindow : Window
 {
-    private static readonly Duration OpenDuration = TimeSpan.FromMilliseconds(300);
-    private static readonly Duration CloseDuration = TimeSpan.FromMilliseconds(200);
+    public static readonly DependencyProperty RevealProperty = DependencyProperty.Register(
+        nameof(Reveal), typeof(double), typeof(ControlCentreWindow),
+        new PropertyMetadata(0.0, (d, _) => ((ControlCentreWindow)d).ApplyReveal()));
+
+    private static readonly Duration OpenDuration = TimeSpan.FromMilliseconds(340);
+    private static readonly Duration CloseDuration = TimeSpan.FromMilliseconds(240);
+    private const double PullDistance = 220;
+    private const double SheetWidth = 356;
 
     private readonly ControlCentreViewModel _vm;
     private bool _open;
+    private Size _from = new(270, 36);
+    private double _fullSheetHeight = 400;
 
     public ControlCentreWindow(ControlCentreViewModel vm)
     {
         InitializeComponent();
         _vm = vm;
         DataContext = vm;
-        Slide.Y = -4000;
+        Slide.Y = 0;
 
         SizeChanged += (_, _) => PositionAtTopCenter();
         Deactivated += (_, _) =>
@@ -44,12 +52,16 @@ public partial class ControlCentreWindow : Window
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
+    public double Reveal
+    {
+        get => (double)GetValue(RevealProperty);
+        set => SetValue(RevealProperty, value);
+    }
+
     public bool IsOpen => _open;
 
-    /// <summary>The panel finished closing (including the slide-away animation).</summary>
+    /// <summary>The panel finished closing (including the morph-away animation).</summary>
     public event EventHandler? PanelClosed;
-
-    private double HiddenOffset => -(Bar.ActualHeight + 30);
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -60,26 +72,26 @@ public partial class ControlCentreWindow : Window
     }
 
     /// <summary>The notch started being dragged down.</summary>
-    public void BeginPull()
+    public void BeginPull(Size from)
     {
         if (_open) return;
-        Prepare();
+        Prepare(from);
     }
 
     public void UpdatePull(double distance)
     {
         if (_open || !IsVisible) return;
-        Slide.Y = Math.Min(0, HiddenOffset + distance);
+        Reveal = Math.Clamp(distance / PullDistance, 0, 1);
     }
 
     public void EndPull()
     {
         if (_open || !IsVisible) return;
-        if (Slide.Y > HiddenOffset * 0.7) OpenPanel();
+        if (Reveal > 0.28) OpenPanel();
         else ClosePanel();
     }
 
-    public void Toggle()
+    public void Toggle(Size from)
     {
         if (_open)
         {
@@ -87,7 +99,7 @@ public partial class ControlCentreWindow : Window
             return;
         }
 
-        Prepare();
+        Prepare(from);
         OpenPanel();
     }
 
@@ -95,7 +107,8 @@ public partial class ControlCentreWindow : Window
     {
         if (!IsVisible) return;
         _open = false;
-        Animate(HiddenOffset, CloseDuration, EasingMode.EaseIn, () =>
+        _fullSheetHeight = Math.Max(Sheet.ActualHeight, _fullSheetHeight);
+        AnimateReveal(0, CloseDuration, EasingMode.EaseIn, () =>
         {
             if (_open) return;
             Hide();
@@ -104,42 +117,63 @@ public partial class ControlCentreWindow : Window
         });
     }
 
-    private void Prepare()
+    private void Prepare(Size from)
     {
-        double current = Slide.Y;
-        Slide.BeginAnimation(TranslateTransform.YProperty, null);
+        _from = from.Width > 1 && from.Height > 1 ? from : new Size(270, 36);
+        BeginAnimation(RevealProperty, null);
 
         if (IsVisible)
         {
-            // Caught mid-close: carry on from where the animation was.
-            Slide.Y = current;
             return;
         }
 
         _vm.OnOpened();
-        Slide.Y = -4000;
+        Sheet.MaxHeight = double.PositiveInfinity;
+        Sheet.Width = SheetWidth;
         Show();
         UpdateLayout();
+        _fullSheetHeight = Math.Max(Sheet.DesiredSize.Height, Sheet.ActualHeight);
         PositionAtTopCenter();
-        Slide.Y = HiddenOffset;
+        Reveal = 0;
+        ApplyReveal();
+        UpdateLayout();
+        PositionAtTopCenter();
     }
 
     private void OpenPanel()
     {
         _open = true;
-        Animate(0, OpenDuration, EasingMode.EaseOut, null);
+        AnimateReveal(1, OpenDuration, EasingMode.EaseOut, null);
         Activate();
     }
 
-    private void Animate(double to, Duration duration, EasingMode easing, Action? completed)
+    private void AnimateReveal(double to, Duration duration, EasingMode easing, Action? completed)
     {
-        double from = Slide.Y;
-        var animation = new DoubleAnimation(from, to, duration)
+        var animation = new DoubleAnimation(Reveal, to, duration)
         {
             EasingFunction = new CubicEase { EasingMode = easing },
         };
         if (completed is not null) animation.Completed += (_, _) => completed();
-        Slide.BeginAnimation(TranslateTransform.YProperty, animation);
+        BeginAnimation(RevealProperty, animation);
+    }
+
+    private void ApplyReveal()
+    {
+        if (Sheet is null) return;
+
+        double t = Math.Clamp(Reveal, 0, 1);
+        double fromWidth = Math.Max(180, _from.Width - 28);
+        double fromHeight = Math.Max(28, _from.Height - 4);
+
+        if (t >= 0.999)
+        {
+            Sheet.Width = SheetWidth;
+            Sheet.MaxHeight = double.PositiveInfinity;
+            return;
+        }
+
+        Sheet.Width = fromWidth + (SheetWidth - fromWidth) * t;
+        Sheet.MaxHeight = fromHeight + (Math.Max(_fullSheetHeight, fromHeight) - fromHeight) * t;
     }
 
     // ---- level sliders: drag anywhere on the bar, like iOS ----

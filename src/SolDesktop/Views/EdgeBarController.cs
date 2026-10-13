@@ -27,6 +27,7 @@ public sealed class EdgeBarController
     private bool _overlapped;
     private bool _fullscreen;
     private bool _keepOpen;
+    private bool _startHold;
     private double _target = double.NaN;
 
     public EdgeBarController(FrameworkElement bar, TranslateTransform slide, ScreenEdge edge)
@@ -75,6 +76,18 @@ public sealed class EdgeBarController
         }
     }
 
+    /// <summary>Holds the dock open while the Windows Start menu is on screen.</summary>
+    public bool StartHold
+    {
+        get => _startHold;
+        set
+        {
+            if (_startHold == value) return;
+            _startHold = value;
+            Update();
+        }
+    }
+
     public void SetEnvironment(bool overlapped, bool fullscreen)
     {
         if (overlapped == _overlapped && fullscreen == _fullscreen) return;
@@ -85,7 +98,7 @@ public sealed class EdgeBarController
 
     private void Update(bool animate = true)
     {
-        bool open = _hovered || _keepOpen;
+        bool open = _hovered || _keepOpen || _startHold;
         double height = _bar.ActualHeight;
         double direction = _edge == ScreenEdge.Top ? -1 : 1;
 

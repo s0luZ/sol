@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Windows.Media;
 using System.Windows.Threading;
 using SolDesktop.Interop;
 using SolDesktop.Services;
@@ -16,6 +17,7 @@ namespace SolDesktop.ViewModels;
 /// </summary>
 public sealed class DockViewModel : IDisposable
 {
+    public const string FolderPrefix = "folder:";
     private const string RecycleBinParsingName = "::{645FF040-5081-101B-9F08-00AA002F954E}";
 
     private readonly WindowTracker _tracker;
@@ -66,7 +68,10 @@ public sealed class DockViewModel : IDisposable
     /// <summary>Set while the user drags an icon so live window changes don't reshuffle the dock.</summary>
     public bool SuspendRebuild { get; set; }
 
+    public event EventHandler<DockItemViewModel>? FolderRequested;
+
     private List<string> Pins => _settings.Current.PinnedApps ??= new List<string>();
+    private List<DockFolder> Folders => _settings.Current.Folders ??= new List<DockFolder>();
 
     private void OnTrackerChanged(object? sender, EventArgs e) => Rebuild();
 
@@ -80,6 +85,29 @@ public sealed class DockViewModel : IDisposable
 
         foreach (string path in Pins)
         {
+            if (path.StartsWith(FolderPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                DockFolder? folder = FindFolderByPin(path);
+                if (folder is null) continue;
+
+                DockItemViewModel folderItem = GetOrCreate("pin:" + path, () => new DockItemViewModel("pin:" + path, DockItemKind.Folder)
+                {
+                    Name = folder.Name,
+                    LaunchTarget = path,
+                    FolderId = folder.Id,
+                    ToolTipText = folder.Name,
+                });
+                folderItem.IsPinned = true;
+                folderItem.Name = folder.Name;
+                folderItem.ToolTipText = folder.Name;
+                var folderWindows = remaining.Where(w => FolderContains(folder, w)).ToList();
+                remaining.RemoveAll(folderWindows.Contains);
+                folderItem.SetWindows(folderWindows, foreground);
+                LoadFolderIcons(folderItem, folder);
+                result.Add(folderItem);
+                continue;
+            }
+
             PinnedApp pin = ResolvePin(path);
             var windows = remaining.Where(w => Matches(pin, w)).ToList();
             remaining.RemoveAll(windows.Contains);
@@ -148,6 +176,9 @@ public sealed class DockViewModel : IDisposable
             case DockItemKind.RecycleBin:
                 OpenRecycleBin();
                 break;
+            case DockItemKind.Folder:
+                FolderRequested?.Invoke(this, item);
+                break;
             case DockItemKind.App when item.Windows.Count == 0:
                 Launch(item);
                 break;
@@ -180,10 +211,98 @@ public sealed class DockViewModel : IDisposable
 
     public void Unpin(DockItemViewModel item)
     {
+        if (item.IsFolder)
+        {
+            DeleteFolder(item);
+            return;
+        }
+
         if (item.LaunchTarget is null) return;
         Pins.RemoveAll(p => p.Equals(item.LaunchTarget, StringComparison.OrdinalIgnoreCase));
         _settings.Save();
         Rebuild();
+    }
+
+    public IReadOnlyList<DockFolder> FolderList => Folders;
+
+    public DockFolder CreateFolder(string name)
+    {
+        var folder = new DockFolder { Name = string.IsNullOrWhiteSpace(name) ? "Folder" : name.Trim() };
+        Folders.Add(folder);
+        Pins.Add(FolderPrefix + folder.Id);
+        _settings.Save();
+        Rebuild();
+        return folder;
+    }
+
+    public void RenameFolder(DockItemViewModel item, string name)
+    {
+        DockFolder? folder = FindFolder(item);
+        if (folder is null || string.IsNullOrWhiteSpace(name)) return;
+        folder.Name = name.Trim();
+        _settings.Save();
+        Rebuild();
+    }
+
+    public void DeleteFolder(DockItemViewModel item)
+    {
+        DockFolder? folder = FindFolder(item);
+        if (folder is null) return;
+        Folders.RemoveAll(f => f.Id == folder.Id);
+        Pins.RemoveAll(p => p.Equals(FolderPrefix + folder.Id, StringComparison.OrdinalIgnoreCase));
+        _settings.Save();
+        Rebuild();
+    }
+
+    public void AddToFolder(DockItemViewModel folderItem, string path)
+    {
+        DockFolder? folder = FindFolder(folderItem);
+        if (folder is null || string.IsNullOrWhiteSpace(path) || path.StartsWith(FolderPrefix, StringComparison.OrdinalIgnoreCase)) return;
+        if (!folder.Apps.Contains(path, StringComparer.OrdinalIgnoreCase)) folder.Apps.Add(path);
+        Pins.RemoveAll(p => p.Equals(path, StringComparison.OrdinalIgnoreCase));
+        _settings.Save();
+        Rebuild();
+    }
+
+    public void AddPathsToFolder(DockItemViewModel folderItem, IEnumerable<string> paths)
+    {
+        DockFolder? folder = FindFolder(folderItem);
+        if (folder is null) return;
+        foreach (string path in paths)
+        {
+            if (string.IsNullOrWhiteSpace(path) || path.StartsWith(FolderPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!folder.Apps.Contains(path, StringComparer.OrdinalIgnoreCase)) folder.Apps.Add(path);
+            Pins.RemoveAll(p => p.Equals(path, StringComparison.OrdinalIgnoreCase));
+        }
+
+        _settings.Save();
+        Rebuild();
+    }
+
+    public void RemoveFromFolder(DockItemViewModel folderItem, string path)
+    {
+        DockFolder? folder = FindFolder(folderItem);
+        if (folder is null) return;
+        folder.Apps.RemoveAll(p => p.Equals(path, StringComparison.OrdinalIgnoreCase));
+        _settings.Save();
+        Rebuild();
+    }
+
+    public void MoveAppToFolder(DockItemViewModel app, DockItemViewModel folder)
+    {
+        string? path = app.LaunchTarget ?? app.ExePath;
+        if (path is null) return;
+        AddToFolder(folder, path);
+    }
+
+    public IEnumerable<(string Path, string Name)> ListFolderApps(DockItemViewModel folderItem)
+    {
+        DockFolder? folder = FindFolder(folderItem);
+        if (folder is null) yield break;
+        foreach (string path in folder.Apps)
+        {
+            yield return (path, ResolvePin(path).Name);
+        }
     }
 
     public void PinPaths(IEnumerable<string> paths)
@@ -249,6 +368,31 @@ public sealed class DockViewModel : IDisposable
         _recycleBinFull = full;
         _icons.Invalidate(RecycleBinParsingName);
         LoadIcon(_recycleBin, RecycleBinParsingName);
+    }
+
+    private DockFolder? FindFolder(DockItemViewModel item) =>
+        item.FolderId is null ? FindFolderByPin(item.LaunchTarget) : Folders.FirstOrDefault(f => f.Id == item.FolderId);
+
+    private DockFolder? FindFolderByPin(string? path)
+    {
+        if (path is null || !path.StartsWith(FolderPrefix, StringComparison.OrdinalIgnoreCase)) return null;
+        string id = path[FolderPrefix.Length..];
+        return Folders.FirstOrDefault(f => f.Id == id);
+    }
+
+    private bool FolderContains(DockFolder folder, TrackedWindow window) =>
+        folder.Apps.Any(path => Matches(ResolvePin(path), window));
+
+    private async void LoadFolderIcons(DockItemViewModel item, DockFolder folder)
+    {
+        var icons = new ImageSource?[Math.Min(4, folder.Apps.Count)];
+        for (int i = 0; i < icons.Length; i++)
+        {
+            PinnedApp pin = ResolvePin(folder.Apps[i]);
+            icons[i] = await _icons.GetAsync(folder.Apps[i], pin.ExePath);
+        }
+
+        item.SetFolderIcons(icons);
     }
 
     private PinnedApp ResolvePin(string path)

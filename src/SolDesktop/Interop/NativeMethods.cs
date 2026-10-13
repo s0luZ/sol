@@ -50,6 +50,22 @@ public static class NativeMethods
     public const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
 
     public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    public const uint PROCESS_VM_OPERATION = 0x0008;
+    public const uint PROCESS_VM_READ = 0x0010;
+    public const uint PROCESS_VM_WRITE = 0x0020;
+
+    public const uint MEM_COMMIT = 0x1000;
+    public const uint MEM_RESERVE = 0x2000;
+    public const uint MEM_RELEASE = 0x8000;
+    public const uint PAGE_READWRITE = 0x04;
+
+    public const uint TB_BUTTONCOUNT = 0x0418;
+    public const uint TB_GETBUTTON = 0x0417;
+    public const uint WM_LBUTTONUP = 0x0202;
+    public const uint WM_RBUTTONUP = 0x0205;
+    public const uint WM_CONTEXTMENU = 0x007B;
+    public const uint NIN_SELECT = 0x0400;
+    public const uint NIN_KEYSELECT = 0x0401;
 
     public const uint ABM_GETSTATE = 0x4;
     public const uint ABM_SETSTATE = 0xA;
@@ -57,7 +73,14 @@ public static class NativeMethods
     public const int ABS_ALWAYSONTOP = 0x2;
 
     public const byte VK_LWIN = 0x5B;
+    public const byte VK_RWIN = 0x5C;
     public const byte VK_MENU = 0x12;
+    public const int WH_KEYBOARD_LL = 13;
+    public const int WM_KEYDOWN = 0x0100;
+    public const int WM_KEYUP = 0x0101;
+    public const int WM_SYSKEYDOWN = 0x0104;
+    public const int WM_SYSKEYUP = 0x0105;
+    public static readonly IntPtr HWND_TOPMOST = new(-1);
     public const uint KEYEVENTF_KEYUP = 0x2;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -220,6 +243,13 @@ public static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWindow(IntPtr hWnd);
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
@@ -286,6 +316,21 @@ public static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool CloseHandle(IntPtr hObject);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, UIntPtr dwSize, uint flAllocationType, uint flProtect);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool VirtualFreeEx(IntPtr hProcess, IntPtr lpAddress, UIntPtr dwSize, uint dwFreeType);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, int nSize, out int lpNumberOfBytesRead);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, IntPtr lpBuffer, int nSize, out int lpNumberOfBytesWritten);
+
     // ---- dwmapi ----
 
     [DllImport("dwmapi.dll")]
@@ -326,6 +371,7 @@ public static class NativeMethods
     public const long WS_EX_TRANSPARENT = 0x00000020;
     public const long WS_EX_TOPMOST = 0x00000008;
     public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_SHOWWINDOW = 0x0040;
@@ -366,6 +412,13 @@ public static class NativeMethods
     }
 
     public delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KBDLLHOOKSTRUCT
+    {
+        public uint vkCode, scanCode, flags, time;
+        public IntPtr dwExtraInfo;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct MARGINS

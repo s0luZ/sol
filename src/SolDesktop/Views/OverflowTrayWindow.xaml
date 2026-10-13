@@ -1,0 +1,73 @@
+<Window x:Class="SolDesktop.Views.OverflowTrayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Sol Tray"
+        SizeToContent="WidthAndHeight"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True" ShowActivated="False"
+        FontFamily="{DynamicResource Sol.TextFont}"
+        Foreground="{DynamicResource Sol.ForegroundBrush}"
+        PreviewKeyDown="OnPreviewKeyDown">
+
+    <Border x:Name="Panel" MinWidth="280" MaxWidth="420" Padding="16,14,16,16"
+            CornerRadius="20" BorderThickness="1"
+            Background="{DynamicResource Sol.SurfaceSolidBrush}"
+            BorderBrush="{DynamicResource Sol.SurfaceBorderBrush}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="6" Direction="90" Opacity="0.45" Color="Black" />
+        </Border.Effect>
+
+        <StackPanel>
+            <Grid Margin="4,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Tray" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock Text="The same icons Windows keeps in the overflow"
+                               FontSize="11.5" Foreground="{DynamicResource Sol.ForegroundDimBrush}" Margin="0,2,0,0" />
+                </StackPanel>
+                <Button Grid.Column="1" Style="{StaticResource Sol.IconButton}" Content="&#xE8BB;"
+                        Click="OnCloseClick" ToolTip="Close" />
+            </Grid>
+
+            <TextBlock x:Name="EmptyHint" Text="No tray icons right now."
+                       FontSize="12.5" Foreground="{DynamicResource Sol.ForegroundDimBrush}"
+                       Margin="4,8,4,4" Visibility="Collapsed" />
+
+            <ItemsControl x:Name="Apps">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Width="84" Padding="8,10,8,8" Margin="3" CornerRadius="14"
+                                Background="Transparent" Cursor="Hand"
+                                MouseLeftButtonUp="OnAppClick"
+                                MouseRightButtonUp="OnAppRightClick">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Sol.SurfaceHoverBrush}" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <Image Source="{Binding Icon}" Width="32" Height="32"
+                                       HorizontalAlignment="Center"
+                                       RenderOptions.BitmapScalingMode="HighQuality" />
+                                <TextBlock Text="{Binding Name}" FontSize="11" TextAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" Margin="0,8,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</Window>

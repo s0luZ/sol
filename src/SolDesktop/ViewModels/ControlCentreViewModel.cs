@@ -361,6 +361,8 @@ public sealed class ControlCentreViewModel : ObservableObject, IDisposable
         BluetoothMessage = null;
     }
 
+    public void OpenPage(ControlCentrePage page) => ShowPage(page);
+
     private void ShowPage(ControlCentrePage page)
     {
         Page = page;
