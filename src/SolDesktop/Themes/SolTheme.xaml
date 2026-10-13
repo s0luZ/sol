@@ -1,0 +1,26 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Sol palette: change these to restyle the whole app. -->
+    <Color x:Key="Sol.AccentColor">#FFFFB547</Color>
+    <SolidColorBrush x:Key="Sol.AccentBrush" Color="{StaticResource Sol.AccentColor}" />
+    <SolidColorBrush x:Key="Sol.SurfaceBrush" Color="#F20D0D10" />
+    <SolidColorBrush x:Key="Sol.SurfaceBorderBrush" Color="#22FFFFFF" />
+    <SolidColorBrush x:Key="Sol.ForegroundBrush" Color="#FFF5F3EE" />
+    <SolidColorBrush x:Key="Sol.ForegroundDimBrush" Color="#99F5F3EE" />
+    <SolidColorBrush x:Key="Sol.SuccessBrush" Color="#FF5BD48A" />
+    <SolidColorBrush x:Key="Sol.DangerBrush" Color="#FFFF6B5B" />
+
+    <FontFamily x:Key="Sol.TextFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <!-- Segoe Fluent Icons ships with Windows 11, Segoe MDL2 Assets with Windows 10. -->
+    <FontFamily x:Key="Sol.IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <Style x:Key="Sol.IconText" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Sol.IconFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{StaticResource Sol.ForegroundBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="6,0" />
+    </Style>
+
+</ResourceDictionary>
