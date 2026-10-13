@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
@@ -12,76 +13,193 @@ namespace SolDesktop;
 public partial class App : Application
 {
     private const string SingleInstanceMutexName = @"Local\SolDesktop.SingleInstance";
+    private const string ShowSettingsEventName = @"Local\SolDesktop.ShowSettings";
 
     private Mutex? _singleInstanceMutex;
     private bool _ownsMutex;
+    private EventWaitHandle? _showSettingsEvent;
+    private RegisteredWaitHandle? _showSettingsWait;
 
     private readonly SettingsService _settings = new();
+    private DispatcherTimer? _saveTimer;
+
     private NetworkStatusService? _network;
     private BluetoothStatusService? _bluetooth;
     private AudioStatusService? _audio;
     private BatteryStatusService? _battery;
+    private WindowTracker? _tracker;
+    private IconService? _icons;
+    private TaskbarService? _taskbar;
+
     private NotchViewModel? _notchViewModel;
     private NotchWindow? _notchWindow;
+    private DockViewModel? _dockViewModel;
+    private DockWindow? _dockWindow;
+    private SettingsWindow? _settingsWindow;
+    private SettingsViewModel? _settingsViewModel;
     private TrayIconService? _tray;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        bool background = e.Args.Any(a => a.Equals(StartupService.BackgroundArgument, StringComparison.OrdinalIgnoreCase));
 
         _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out _ownsMutex);
         if (!_ownsMutex)
         {
+            // Already running: opening Sol again brings up its window in the running instance.
+            if (!background && EventWaitHandle.TryOpenExisting(ShowSettingsEventName, out EventWaitHandle? existing))
+            {
+                existing.Set();
+                existing.Dispose();
+            }
+
             Shutdown();
             return;
         }
+
+        _showSettingsEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSettingsEventName);
+        _showSettingsWait = ThreadPool.RegisterWaitForSingleObject(
+            _showSettingsEvent, (_, _) => Dispatcher.InvokeAsync(ShowSettings), null, Timeout.Infinite, false);
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception ex) Log.Error(ex);
+            _taskbar?.Restore();
         };
 
         _settings.Load();
+        ThemeService.Apply(_settings.Current);
+
+        _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+        _saveTimer.Tick += (_, _) =>
+        {
+            _saveTimer.Stop();
+            _settings.Save();
+        };
 
         _network = new NetworkStatusService(Dispatcher);
         _bluetooth = new BluetoothStatusService(Dispatcher);
         _audio = new AudioStatusService(Dispatcher);
         _battery = new BatteryStatusService(Dispatcher);
+        _tracker = new WindowTracker(Dispatcher);
+        _icons = new IconService();
+        _taskbar = new TaskbarService(_settings);
 
         _notchViewModel = new NotchViewModel(Dispatcher, _network, _bluetooth, _audio, _battery);
         _notchWindow = new NotchWindow { DataContext = _notchViewModel };
-        if (_settings.Current.NotchEnabled)
+
+        _dockViewModel = new DockViewModel(_tracker, _settings, _icons);
+        _dockWindow = new DockWindow(_dockViewModel);
+
+        _tray = new TrayIconService();
+        _tray.SettingsRequested += (_, _) => ShowSettings();
+        _tray.NotchToggled += (_, enabled) => ModifySettings(s => s.NotchEnabled = enabled);
+        _tray.DockToggled += (_, enabled) => ModifySettings(s => s.DockEnabled = enabled);
+        _tray.QuitRequested += (_, _) => Shutdown();
+
+        _tracker.Changed += OnTrackerChanged;
+        ApplySettings();
+
+        if (StartupService.IsEnabled)
         {
-            _notchWindow.Show();
+            // Re-register so the entry follows the exe if it was moved, and carries --background.
+            try
+            {
+                StartupService.SetEnabled(true);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex);
+            }
         }
 
-        _tray = new TrayIconService(_settings.Current.NotchEnabled, StartupService.IsEnabled);
-        _tray.NotchToggled += OnNotchToggled;
-        _tray.StartWithWindowsToggled += OnStartWithWindowsToggled;
-        _tray.QuitRequested += (_, _) => Shutdown();
+        if (!background) ShowSettings();
 
         await _bluetooth.InitializeAsync();
     }
 
-    private void OnNotchToggled(object? sender, bool enabled)
+    public void ShowSettings()
     {
-        _settings.Current.NotchEnabled = enabled;
-        _settings.Save();
+        if (_settingsWindow is null)
+        {
+            _settingsViewModel = new SettingsViewModel(_settings, OnSettingsChanged);
+            _settingsWindow = new SettingsWindow { DataContext = _settingsViewModel };
+            _settingsWindow.Closed += (_, _) =>
+            {
+                _settingsWindow = null;
+                _settingsViewModel = null;
+            };
+            _settingsWindow.Show();
+        }
+        else if (_settingsWindow.WindowState == WindowState.Minimized)
+        {
+            _settingsWindow.WindowState = WindowState.Normal;
+        }
 
-        if (enabled) _notchWindow?.Show();
-        else _notchWindow?.Hide();
+        _settingsWindow.Activate();
     }
 
-    private void OnStartWithWindowsToggled(object? sender, bool enabled)
+    /// <summary>For changes made outside the settings window (tray, notch/dock menus).</summary>
+    public void ModifySettings(Action<AppSettings> change)
     {
-        try
+        change(_settings.Current);
+        OnSettingsChanged();
+        _settingsViewModel?.Refresh();
+    }
+
+    private void OnSettingsChanged()
+    {
+        ApplySettings();
+        _saveTimer?.Stop();
+        _saveTimer?.Start();
+    }
+
+    private void ApplySettings()
+    {
+        AppSettings s = _settings.Current;
+        ThemeService.Apply(s);
+
+        if (_notchWindow is not null)
         {
-            StartupService.SetEnabled(enabled);
+            _notchWindow.Controller.Mode = s.NotchMode;
+            if (!s.NotchEnabled) _notchWindow.Hide();
+            else if (!_notchWindow.IsVisible) _notchWindow.Show();
         }
-        catch (Exception ex)
+
+        if (_dockWindow is not null)
         {
-            Log.Error(ex);
+            _dockWindow.Controller.Mode = s.DockMode;
+            _dockWindow.ApplyLayout();
+            if (!s.DockEnabled) _dockWindow.Hide();
+            else if (!_dockWindow.IsVisible) _dockWindow.Show();
+        }
+
+        _taskbar?.Apply(s.DockEnabled ? s.TaskbarMode : TaskbarMode.Leave);
+        _tray?.Sync(s.NotchEnabled, s.DockEnabled);
+        UpdateBarEnvironment();
+    }
+
+    private void OnTrackerChanged(object? sender, EventArgs e)
+    {
+        UpdateBarEnvironment();
+        _taskbar?.Enforce();
+    }
+
+    private void UpdateBarEnvironment()
+    {
+        if (_tracker is null) return;
+        bool fullscreen = _tracker.IsForegroundFullscreen;
+
+        if (_notchWindow is { IsVisible: true })
+        {
+            _notchWindow.Controller.SetEnvironment(_tracker.AnyWindowIntersects(_notchWindow.GetBarZone()), fullscreen);
+        }
+
+        if (_dockWindow is { IsVisible: true })
+        {
+            _dockWindow.Controller.SetEnvironment(_tracker.AnyWindowIntersects(_dockWindow.GetBarZone()), fullscreen);
         }
     }
 
@@ -94,9 +212,20 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _showSettingsWait?.Unregister(null);
+        _showSettingsEvent?.Dispose();
+
+        _taskbar?.Restore();
+        if (_saveTimer?.IsEnabled == true) _settings.Save();
+
         _tray?.Dispose();
+        _settingsWindow?.Close();
         _notchWindow?.Close();
+        _dockWindow?.Close();
         _notchViewModel?.Dispose();
+        _dockViewModel?.Dispose();
+        _tracker?.Dispose();
+        _icons?.Dispose();
         _network?.Dispose();
         _bluetooth?.Dispose();
         _audio?.Dispose();

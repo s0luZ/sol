@@ -6,6 +6,8 @@ namespace SolDesktop.Services;
 /// <summary>Registers Sol Desktop to launch at sign-in for the current user (no admin rights needed).</summary>
 public static class StartupService
 {
+    public const string BackgroundArgument = "--background";
+
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "SolDesktop";
 
@@ -24,7 +26,7 @@ public static class StartupService
         if (enabled)
         {
             string exePath = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot resolve executable path.");
-            key.SetValue(ValueName, $"\"{exePath}\"");
+            key.SetValue(ValueName, $"\"{exePath}\" {BackgroundArgument}");
         }
         else
         {

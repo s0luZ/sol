@@ -10,36 +10,44 @@ public sealed class TrayIconService : IDisposable
 {
     private readonly Forms.NotifyIcon _notifyIcon;
     private readonly Forms.ContextMenuStrip _menu;
+    private readonly Forms.ToolStripMenuItem _notchItem;
+    private readonly Forms.ToolStripMenuItem _dockItem;
     private readonly Icon _icon;
+    private bool _syncing;
 
+    public event EventHandler? SettingsRequested;
     public event EventHandler<bool>? NotchToggled;
-    public event EventHandler<bool>? StartWithWindowsToggled;
+    public event EventHandler<bool>? DockToggled;
     public event EventHandler? QuitRequested;
 
-    public TrayIconService(bool notchEnabled, bool startWithWindows)
+    public TrayIconService()
     {
         _icon = CreateSunIcon();
 
-        var title = new Forms.ToolStripMenuItem("Sol Desktop") { Enabled = false };
+        var settingsItem = new Forms.ToolStripMenuItem("Sol settings…", null, (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty));
+        settingsItem.Font = new Font(settingsItem.Font, FontStyle.Bold);
 
-        var notchItem = new Forms.ToolStripMenuItem("Show notch") { Checked = notchEnabled, CheckOnClick = true };
-        notchItem.CheckedChanged += (_, _) => NotchToggled?.Invoke(this, notchItem.Checked);
+        _notchItem = new Forms.ToolStripMenuItem("Show notch") { CheckOnClick = true };
+        _notchItem.CheckedChanged += (_, _) =>
+        {
+            if (!_syncing) NotchToggled?.Invoke(this, _notchItem.Checked);
+        };
 
-        var dockItem = new Forms.ToolStripMenuItem("Dock (coming soon)") { Enabled = false };
-
-        var startupItem = new Forms.ToolStripMenuItem("Start with Windows") { Checked = startWithWindows, CheckOnClick = true };
-        startupItem.CheckedChanged += (_, _) => StartWithWindowsToggled?.Invoke(this, startupItem.Checked);
+        _dockItem = new Forms.ToolStripMenuItem("Show dock") { CheckOnClick = true };
+        _dockItem.CheckedChanged += (_, _) =>
+        {
+            if (!_syncing) DockToggled?.Invoke(this, _dockItem.Checked);
+        };
 
         var quitItem = new Forms.ToolStripMenuItem("Quit Sol Desktop", null, (_, _) => QuitRequested?.Invoke(this, EventArgs.Empty));
 
         _menu = new Forms.ContextMenuStrip();
         _menu.Items.AddRange(new Forms.ToolStripItem[]
         {
-            title,
+            settingsItem,
             new Forms.ToolStripSeparator(),
-            notchItem,
-            dockItem,
-            startupItem,
+            _notchItem,
+            _dockItem,
             new Forms.ToolStripSeparator(),
             quitItem,
         });
@@ -51,6 +59,18 @@ public sealed class TrayIconService : IDisposable
             ContextMenuStrip = _menu,
             Visible = true,
         };
+        _notifyIcon.MouseClick += (_, e) =>
+        {
+            if (e.Button == Forms.MouseButtons.Left) SettingsRequested?.Invoke(this, EventArgs.Empty);
+        };
+    }
+
+    public void Sync(bool notchEnabled, bool dockEnabled)
+    {
+        _syncing = true;
+        _notchItem.Checked = notchEnabled;
+        _dockItem.Checked = dockEnabled;
+        _syncing = false;
     }
 
     private static Icon CreateSunIcon()

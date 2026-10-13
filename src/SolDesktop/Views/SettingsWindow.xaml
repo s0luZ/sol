@@ -1,0 +1,324 @@
+<Window x:Class="SolDesktop.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:SolDesktop.Converters"
+        Title="Sol Desktop"
+        Width="900" Height="680"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" ResizeMode="CanMinimize"
+        UseLayoutRounding="True"
+        Background="{DynamicResource Sol.SurfaceSolidBrush}"
+        FontFamily="{DynamicResource Sol.TextFont}"
+        Foreground="{DynamicResource Sol.ForegroundBrush}"
+        FontSize="13">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="48" ResizeBorderThickness="0" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <conv:EnumToBoolConverter x:Key="EnumToBool" />
+        <Style x:Key="Page" TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="Padding" Value="18,0,26,20" />
+        </Style>
+    </Window.Resources>
+
+    <Border BorderBrush="{DynamicResource Sol.SurfaceBorderBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Title bar -->
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="26,0,0,0">
+                <Ellipse Width="10" Height="10" Fill="{DynamicResource Sol.AccentBrush}" />
+                <TextBlock Text="Sol Desktop" FontWeight="SemiBold" Margin="12,0,0,0" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Version, StringFormat=v{0}}" Margin="8,0,0,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource Sol.ForegroundDimBrush}" FontSize="12" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <Button Style="{StaticResource Sol.CaptionButton}" Content="&#xE921;" Click="OnMinimizeClick"
+                        WindowChrome.IsHitTestVisibleInChrome="True" />
+                <Button Style="{StaticResource Sol.CaptionCloseButton}" Content="&#xE8BB;" Click="OnCloseClick"
+                        WindowChrome.IsHitTestVisibleInChrome="True" />
+            </StackPanel>
+
+            <TabControl Grid.Row="1" Style="{StaticResource Sol.NavTabControl}">
+
+                <!-- ===================== General ===================== -->
+                <TabItem Header="General" Tag="&#xE713;">
+                    <ScrollViewer Style="{StaticResource Page}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Sol.SectionTitle}" Text="General" />
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Start with Windows" />
+                                        <TextBlock Style="{StaticResource Sol.Hint}" Text="Sol starts quietly in the background when you sign in. Opening Sol yourself shows this window." />
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" Style="{StaticResource Sol.ToggleSwitch}" IsChecked="{Binding StartWithWindows}" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Sol.Label}" Text="Where to find Sol" />
+                                    <TextBlock Style="{StaticResource Sol.Hint}" Text="Right-click the notch or the dock for quick options. Open SolDesktop.exe again at any time to come back here." />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Settings and logs" />
+                                        <TextBlock Style="{StaticResource Sol.Hint}" Text="Stored in %AppData%\SolDesktop." />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Style="{StaticResource Sol.Button}" Content="Open folder" Command="{Binding OpenDataFolderCommand}" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Quit Sol Desktop" />
+                                        <TextBlock Style="{StaticResource Sol.Hint}" Text="Removes the notch and dock and gives the Windows taskbar back." />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Style="{StaticResource Sol.Button}" Content="Quit" Command="{Binding QuitCommand}" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- ===================== Notch ===================== -->
+                <TabItem Header="Notch" Tag="&#xE7F4;">
+                    <ScrollViewer Style="{StaticResource Page}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Sol.SectionTitle}" Text="Notch" />
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Show notch" />
+                                        <TextBlock Style="{StaticResource Sol.Hint}" Text="Time, date, network, Bluetooth, volume and battery at the top of the screen." />
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" Style="{StaticResource Sol.ToggleSwitch}" IsChecked="{Binding NotchEnabled}" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Sol.Label}" Text="Behaviour" />
+                                    <WrapPanel Margin="0,10,0,0">
+                                        <RadioButton Style="{StaticResource Sol.Segment}" GroupName="NotchMode" Content="Always visible"
+                                                     IsChecked="{Binding NotchMode, Converter={StaticResource EnumToBool}, ConverterParameter=AlwaysVisible}" />
+                                        <RadioButton Style="{StaticResource Sol.Segment}" GroupName="NotchMode" Content="Tuck away when apps overlap"
+                                                     IsChecked="{Binding NotchMode, Converter={StaticResource EnumToBool}, ConverterParameter=SmartHide}" />
+                                        <RadioButton Style="{StaticResource Sol.Segment}" GroupName="NotchMode" Content="Only when hovered"
+                                                     IsChecked="{Binding NotchMode, Converter={StaticResource EnumToBool}, ConverterParameter=HoverOnly}" />
+                                    </WrapPanel>
+                                    <TextBlock Style="{StaticResource Sol.Hint}" Text="When tucked away a thin sliver stays at the top edge. Move the mouse to it to bring the notch back. Fullscreen games and videos hide it completely." />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <Grid>
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Size" />
+                                        <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding NotchScale, StringFormat={}{0:P0}}" />
+                                    </Grid>
+                                    <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,0" Minimum="0.8" Maximum="1.6"
+                                            Value="{Binding NotchScale}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- ===================== Dock ===================== -->
+                <TabItem Header="Dock" Tag="&#xE71D;">
+                    <ScrollViewer Style="{StaticResource Page}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Sol.SectionTitle}" Text="Dock" />
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Show dock" />
+                                        <TextBlock Style="{StaticResource Sol.Hint}" Text="Drop apps or shortcuts onto the dock to pin them. Drag pinned icons to reorder, hover a running app to see its windows, right-click for more." />
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" Style="{StaticResource Sol.ToggleSwitch}" IsChecked="{Binding DockEnabled}" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Sol.Label}" Text="Behaviour" />
+                                    <WrapPanel Margin="0,10,0,0">
+                                        <RadioButton Style="{StaticResource Sol.Segment}" GroupName="DockMode" Content="Always visible"
+                                                     IsChecked="{Binding DockMode, Converter={StaticResource EnumToBool}, ConverterParameter=AlwaysVisible}" />
+                                        <RadioButton Style="{StaticResource Sol.Segment}" GroupName="DockMode" Content="Tuck away when apps overlap"
+                                                     IsChecked="{Binding DockMode, Converter={StaticResource EnumToBool}, ConverterParameter=SmartHide}" />
+                                        <RadioButton Style="{StaticResource Sol.Segment}" GroupName="DockMode" Content="Only when hovered"
+                                                     IsChecked="{Binding DockMode, Converter={StaticResource EnumToBool}, ConverterParameter=HoverOnly}" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <Grid>
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Icon size" />
+                                        <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding DockIconSize, StringFormat={}{0:0} px}" />
+                                    </Grid>
+                                    <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,14" Minimum="32" Maximum="80"
+                                            Value="{Binding DockIconSize}" />
+                                    <Grid>
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Magnification on hover" />
+                                        <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding DockMagnification, StringFormat={}{0:0.0}×}" />
+                                    </Grid>
+                                    <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,0" Minimum="1" Maximum="2.2"
+                                            Value="{Binding DockMagnification}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Sol.Label}" Text="Windows taskbar" />
+                                    <WrapPanel Margin="0,10,0,0">
+                                        <RadioButton Style="{StaticResource Sol.Segment}" GroupName="TaskbarMode" Content="Hide (dock replaces it)"
+                                                     IsChecked="{Binding TaskbarMode, Converter={StaticResource EnumToBool}, ConverterParameter=Hide}" />
+                                        <RadioButton Style="{StaticResource Sol.Segment}" GroupName="TaskbarMode" Content="Auto-hide"
+                                                     IsChecked="{Binding TaskbarMode, Converter={StaticResource EnumToBool}, ConverterParameter=AutoHide}" />
+                                        <RadioButton Style="{StaticResource Sol.Segment}" GroupName="TaskbarMode" Content="Keep it"
+                                                     IsChecked="{Binding TaskbarMode, Converter={StaticResource EnumToBool}, ConverterParameter=Leave}" />
+                                    </WrapPanel>
+                                    <TextBlock Style="{StaticResource Sol.Hint}" Text="Hiding the taskbar also hides its system tray icons (Discord, Steam, …). The taskbar always comes back when Sol quits or the dock is turned off." />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- ===================== Appearance ===================== -->
+                <TabItem Header="Appearance" Tag="&#xE790;">
+                    <ScrollViewer Style="{StaticResource Page}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Sol.SectionTitle}" Text="Appearance" />
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Sol.Label}" Text="Accent colour" />
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ListBox Style="{StaticResource Sol.SwatchList}" ItemsSource="{Binding AccentSwatches}" SelectedItem="{Binding AccentColor}" />
+                                        <TextBox Grid.Column="1" Style="{StaticResource Sol.TextBox}" Width="96" VerticalAlignment="Top"
+                                                 Text="{Binding AccentColor, UpdateSourceTrigger=LostFocus}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Sol.Label}" Text="Bar colour" />
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ListBox Style="{StaticResource Sol.SwatchList}" ItemsSource="{Binding SurfaceSwatches}" SelectedItem="{Binding SurfaceColor}" />
+                                        <TextBox Grid.Column="1" Style="{StaticResource Sol.TextBox}" Width="96" VerticalAlignment="Top"
+                                                 Text="{Binding SurfaceColor, UpdateSourceTrigger=LostFocus}" />
+                                    </Grid>
+                                    <Grid Margin="0,6,0,0">
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Opacity" />
+                                        <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding SurfaceOpacity, StringFormat={}{0:P0}}" />
+                                    </Grid>
+                                    <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,0" Minimum="0.5" Maximum="1"
+                                            Value="{Binding SurfaceOpacity}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Sol.Label}" Text="Text and icon colour" />
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ListBox Style="{StaticResource Sol.SwatchList}" ItemsSource="{Binding ForegroundSwatches}" SelectedItem="{Binding ForegroundColor}" />
+                                        <TextBox Grid.Column="1" Style="{StaticResource Sol.TextBox}" Width="96" VerticalAlignment="Top"
+                                                 Text="{Binding ForegroundColor, UpdateSourceTrigger=LostFocus}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Sol.Label}" Text="Font" />
+                                    <ComboBox Style="{StaticResource Sol.ComboBox}" Margin="0,10,0,0" Height="34"
+                                              ItemsSource="{Binding Fonts}" SelectedItem="{Binding FontFamily}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" FontFamily="{Binding}" FontSize="13" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
+                                <StackPanel>
+                                    <Grid>
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Corner roundness" />
+                                        <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding CornerRadius, StringFormat={}{0:0} px}" />
+                                    </Grid>
+                                    <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,14" Minimum="4" Maximum="28"
+                                            Value="{Binding CornerRadius}" />
+                                    <Grid>
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Edge curve" />
+                                        <TextBlock Style="{StaticResource Sol.Value}" Text="{Binding FlareRadius, StringFormat={}{0:0} px}" />
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource Sol.Hint}" Text="The inward curve where the notch and dock meet the screen edge." />
+                                    <Slider Style="{StaticResource Sol.Slider}" Margin="0,10,0,0" Minimum="0" Maximum="20"
+                                            Value="{Binding FlareRadius}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Button Style="{StaticResource Sol.Button}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                    Content="Reset appearance" Command="{Binding ResetAppearanceCommand}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+        </Grid>
+    </Border>
+</Window>
