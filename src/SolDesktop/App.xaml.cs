@@ -14,11 +14,15 @@ public partial class App : Application
 {
     private const string SingleInstanceMutexName = @"Local\SolDesktop.SingleInstance";
     private const string ShowSettingsEventName = @"Local\SolDesktop.ShowSettings";
+    private const string QuitEventName = @"Local\SolDesktop.Quit";
+    private const string QuitArgument = "--quit";
 
     private Mutex? _singleInstanceMutex;
     private bool _ownsMutex;
     private EventWaitHandle? _showSettingsEvent;
     private RegisteredWaitHandle? _showSettingsWait;
+    private EventWaitHandle? _quitEvent;
+    private RegisteredWaitHandle? _quitWait;
 
     private readonly SettingsService _settings = new();
     private DispatcherTimer? _saveTimer;
@@ -43,12 +47,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
         bool background = e.Args.Any(a => a.Equals(StartupService.BackgroundArgument, StringComparison.OrdinalIgnoreCase));
+        bool quit = e.Args.Any(a => a.Equals(QuitArgument, StringComparison.OrdinalIgnoreCase));
 
         _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out _ownsMutex);
-        if (!_ownsMutex)
+        if (!_ownsMutex || quit)
         {
-            // Already running: opening Sol again brings up its window in the running instance.
-            if (!background && EventWaitHandle.TryOpenExisting(ShowSettingsEventName, out EventWaitHandle? existing))
+            // Already running: forward the request (show the window, or quit cleanly) to that instance.
+            string eventName = quit ? QuitEventName : ShowSettingsEventName;
+            if (!background && EventWaitHandle.TryOpenExisting(eventName, out EventWaitHandle? existing))
             {
                 existing.Set();
                 existing.Dispose();
@@ -61,6 +67,9 @@ public partial class App : Application
         _showSettingsEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSettingsEventName);
         _showSettingsWait = ThreadPool.RegisterWaitForSingleObject(
             _showSettingsEvent, (_, _) => Dispatcher.InvokeAsync(ShowSettings), null, Timeout.Infinite, false);
+        _quitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, QuitEventName);
+        _quitWait = ThreadPool.RegisterWaitForSingleObject(
+            _quitEvent, (_, _) => Dispatcher.InvokeAsync(() => Shutdown()), null, Timeout.Infinite, true);
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
@@ -214,6 +223,8 @@ public partial class App : Application
     {
         _showSettingsWait?.Unregister(null);
         _showSettingsEvent?.Dispose();
+        _quitWait?.Unregister(null);
+        _quitEvent?.Dispose();
 
         _taskbar?.Restore();
         if (_saveTimer?.IsEnabled == true) _settings.Save();
