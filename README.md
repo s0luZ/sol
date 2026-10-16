@@ -8,7 +8,7 @@ A mac-style notch, Control Centre, and dock for Windows 10 and 11.
 2. Download `SolDesktop.exe`.
 3. Double-click it.
 
-No .NET install is required. Use **64-bit Windows 10 or 11**.
+No .NET install is required. Use **64-bit Windows 10 or 11**. The latest notes are in [CHANGELOG.md](CHANGELOG.md).
 
 Windows may show a SmartScreen warning because the app is not code-signed. Choose **More info → Run anyway**.
 

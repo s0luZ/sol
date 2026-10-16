@@ -41,6 +41,7 @@ public partial class DockWindow : Window
     private int _previewOutsideTicks;
     private bool _menuHold;
     private bool _flyoutHold;
+    private bool _previewAboveShell;
 
     public DockWindow(DockViewModel vm, IconService icons)
     {
@@ -78,13 +79,17 @@ public partial class DockWindow : Window
 
     public EdgeBarController Controller { get; }
 
-    /// <summary>Re-assert topmost so the dock sits in front of Start after Win is pressed.</summary>
+    /// <summary>Re-assert topmost so the dock and window picker sit in front of Start.</summary>
     public void RaiseAbove()
     {
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero) return;
-        NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
-            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+        if (hwnd != IntPtr.Zero)
+        {
+            NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
+                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+        }
+
+        _preview.KeepClickable();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -216,6 +221,8 @@ public partial class DockWindow : Window
 
     private void OnWindowMouseMove(object sender, MouseEventArgs e)
     {
+        if (e.GetPosition(this).Y >= ActualHeight - 28) Controller.Nudge();
+
         Point inItems = e.GetPosition(Items);
         if (Items.IsMouseOver || _dragging)
         {
@@ -330,6 +337,8 @@ public partial class DockWindow : Window
         _vm.Click(item);
     }
 
+    private void OnShowDesktop(object sender, RoutedEventArgs e) => WindowActions.ShowDesktop();
+
     private int PinIndexAt(double x)
     {
         int best = -1;
@@ -410,6 +419,12 @@ public partial class DockWindow : Window
                 if (item.IsRunning)
                 {
                     entries.Add((null, null));
+                    if (item.Windows.Count == 1)
+                    {
+                        TrackedWindow window = item.Windows[0];
+                        entries.Add((NativeMethods.IsZoomed(window.Handle) ? "Restore" : "Maximize", () => WindowActions.ToggleMaximize(window.Handle)));
+                    }
+
                     entries.Add((item.Windows.Count > 1 ? $"Close all {item.Windows.Count} windows" : "Close window", () => _vm.CloseAll(item)));
                 }
                 break;
@@ -508,6 +523,7 @@ public partial class DockWindow : Window
         _previewOutsideTicks = 0;
         _preview.ShowFor(item, center.X, barTop.Y);
         SyncHold();
+        SyncPreviewZOrder();
         _previewTracker.Start();
     }
 
@@ -518,6 +534,7 @@ public partial class DockWindow : Window
         _preview.HideAndClear();
         _previewAnchor = null;
         SyncHold();
+        SyncPreviewZOrder();
     }
 
     private void RefreshPreview()
@@ -536,6 +553,9 @@ public partial class DockWindow : Window
         }
 
         NativeMethods.GetCursorPos(out NativeMethods.POINT cursor);
+        SyncPreviewZOrder();
+        if (Controller.StartHold) _preview.KeepClickable();
+
         if (_preview.ContainsScreenPoint(cursor) || _hoverItem is not null || IsInPreviewGap(cursor))
         {
             _previewOutsideTicks = 0;
@@ -567,12 +587,28 @@ public partial class DockWindow : Window
         return gap.Contains(cursor);
     }
 
+    /// <summary>
+    /// While Start is open, Explorer keeps raising the taskbar over the window picker.
+    /// Re-assert the picker on every frame so its cards stay clickable.
+    /// </summary>
+    private void SyncPreviewZOrder()
+    {
+        bool need = Controller.StartHold && _preview.IsVisible;
+        if (need == _previewAboveShell) return;
+        _previewAboveShell = need;
+        if (need) CompositionTarget.Rendering += OnKeepPreviewAbove;
+        else CompositionTarget.Rendering -= OnKeepPreviewAbove;
+    }
+
+    private void OnKeepPreviewAbove(object? sender, EventArgs e) => _preview.RaiseAbove();
+
     private void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatcher.InvokeAsync(ApplyLayout);
 
     protected override void OnClosed(EventArgs e)
     {
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         CompositionTarget.Rendering -= OnRendering;
+        CompositionTarget.Rendering -= OnKeepPreviewAbove;
         _preview.Close();
         _folderFlyout.Close();
         base.OnClosed(e);

@@ -47,15 +47,15 @@ public partial class OverflowTrayWindow : Window
     public void ShowBelow(double anchorCenterX, double anchorBottom) =>
         ShowAt(anchorCenterX, anchorBottom, below: true);
 
-    public async void ShowAt(double anchorCenterX, double anchorY, bool below)
+    public void ShowAt(double anchorCenterX, double anchorY, bool below)
     {
         _anchorCenterX = anchorCenterX;
         _anchorY = anchorY;
         _below = below;
-        await Reload();
         if (!IsVisible) Show();
         Reposition();
         Activate();
+        _ = Reload();
     }
 
     public void HideFlyout()
@@ -73,19 +73,29 @@ public partial class OverflowTrayWindow : Window
         NativeMethods.UseRoundedCorners(hwnd);
     }
 
+    private int _reload;
+
     private async System.Threading.Tasks.Task Reload()
     {
-        Items.Clear();
-        foreach (NotifyIconEntry entry in NotifyIconService.List())
+        int ticket = ++_reload;
+        var entries = await System.Threading.Tasks.Task.Run(NotifyIconService.List);
+        if (ticket != _reload) return;
+
+        var next = new System.Collections.Generic.List<OverflowAppItem>(entries.Count);
+        foreach (NotifyIconEntry entry in entries)
         {
-            Items.Add(new OverflowAppItem
+            next.Add(new OverflowAppItem
             {
                 Entry = entry,
                 Icon = entry.ExePath is null ? null : await _icons.GetAsync(entry.ExePath),
             });
         }
 
+        if (ticket != _reload) return;
+        Items.Clear();
+        foreach (OverflowAppItem item in next) Items.Add(item);
         EmptyHint.Visibility = Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        Reposition();
     }
 
     private void Reposition()

@@ -86,6 +86,7 @@ public sealed class ControlCentreViewModel : ObservableObject, IDisposable
     private readonly BluetoothStatusService _bluetooth;
     private readonly AudioStatusService _audio;
     private readonly BrightnessService _brightness;
+    private readonly NightLightService _nightLight = new();
     private readonly MediaService _media;
     private readonly DispatcherTimer _clock;
 
@@ -155,6 +156,23 @@ public sealed class ControlCentreViewModel : ObservableObject, IDisposable
         OpenBluetoothSettingsCommand = new RelayCommand(() => OpenUri("ms-settings:bluetooth"));
         OpenSoundSettingsCommand = new RelayCommand(() => OpenUri("ms-settings:sound"));
         OpenEthernetSettingsCommand = new RelayCommand(() => OpenUri("ms-settings:network-ethernet"));
+        OpenDisplaySettingsCommand = new RelayCommand(() => OpenUri("ms-settings:display"));
+        OpenNightLightCommand = new RelayCommand(() => OpenUri("ms-settings:nightlight"));
+        OpenNotificationsCommand = new RelayCommand(() => OpenUri("ms-settings:notifications"));
+        OpenQuietHoursCommand = new RelayCommand(() => OpenUri("ms-settings:quiethours"));
+        OpenFileExplorerCommand = new RelayCommand(() => LaunchTool("explorer.exe"));
+        OpenTaskManagerCommand = new RelayCommand(() => LaunchTool("taskmgr.exe"));
+        OpenSnippingToolCommand = new RelayCommand(() => OpenUri("ms-screenclip:"));
+        LockCommand = new RelayCommand(() =>
+        {
+            CloseRequested?.Invoke(this, EventArgs.Empty);
+            WindowActions.Lock();
+        });
+        SleepCommand = new RelayCommand(() => ConfirmPower("Sleep", "Put the PC to sleep?", WindowActions.Sleep));
+        RestartCommand = new RelayCommand(() => ConfirmPower("Restart", "Restart the PC?", WindowActions.Restart));
+        ShutDownCommand = new RelayCommand(() => ConfirmPower("Shut down", "Shut down the PC?", WindowActions.ShutDown));
+
+        ToggleNightLightSectionCommand = new RelayCommand(() => IsNightLightOpen = !IsNightLightOpen);
 
         UpdateClock();
         UpdateWifi();
@@ -162,6 +180,7 @@ public sealed class ControlCentreViewModel : ObservableObject, IDisposable
         UpdateAudio();
         UpdateEthernet();
         UpdateMedia();
+        ReadNightLight();
     }
 
     /// <summary>The panel should close (e.g. a Windows settings page was opened).</summary>
@@ -188,6 +207,18 @@ public sealed class ControlCentreViewModel : ObservableObject, IDisposable
     public ICommand OpenBluetoothSettingsCommand { get; }
     public ICommand OpenSoundSettingsCommand { get; }
     public ICommand OpenEthernetSettingsCommand { get; }
+    public ICommand OpenDisplaySettingsCommand { get; }
+    public ICommand OpenNightLightCommand { get; }
+    public ICommand OpenNotificationsCommand { get; }
+    public ICommand OpenQuietHoursCommand { get; }
+    public ICommand OpenFileExplorerCommand { get; }
+    public ICommand OpenTaskManagerCommand { get; }
+    public ICommand OpenSnippingToolCommand { get; }
+    public ICommand LockCommand { get; }
+    public ICommand SleepCommand { get; }
+    public ICommand RestartCommand { get; }
+    public ICommand ShutDownCommand { get; }
+    public ICommand ToggleNightLightSectionCommand { get; }
 
     // ---- pages ----
 
@@ -311,6 +342,52 @@ public sealed class ControlCentreViewModel : ObservableObject, IDisposable
 
     public bool HasBrightness => _brightness.IsAvailable;
 
+    public bool ShowDisplayControls => HasBrightness || NightLightSupported;
+
+    private bool _nightLightSupported;
+    private bool _nightLightOn;
+    private bool _nightLightOpen;
+    private double _nightLightStrength = 50;
+    private bool _writingNightLight;
+
+    public bool NightLightSupported => _nightLightSupported;
+
+    public bool IsNightLightOpen
+    {
+        get => _nightLightOpen;
+        private set
+        {
+            if (!SetProperty(ref _nightLightOpen, value)) return;
+            OnPropertyChanged(nameof(NightLightChevron));
+        }
+    }
+
+    public string NightLightChevron => _nightLightOpen ? "\uE70E" : "\uE70D";
+
+    public string NightLightStatus => _nightLightOn ? "On" : "Off";
+
+    public bool IsNightLightOn
+    {
+        get => _nightLightOn;
+        set
+        {
+            if (_writingNightLight || !SetProperty(ref _nightLightOn, value)) return;
+            _nightLight.SetEnabled(value);
+            OnPropertyChanged(nameof(NightLightStatus));
+        }
+    }
+
+    /// <summary>0 is the coolest filter, 100 is the warmest.</summary>
+    public double NightLightStrength
+    {
+        get => _nightLightStrength;
+        set
+        {
+            if (_writingNightLight || !SetProperty(ref _nightLightStrength, value)) return;
+            _nightLight.SetStrength((int)Math.Round(value));
+        }
+    }
+
     /// <summary>0 - 100</summary>
     public double Brightness
     {
@@ -345,6 +422,7 @@ public sealed class ControlCentreViewModel : ObservableObject, IDisposable
         _ = RefreshBluetoothDevicesAsync();
         _ = RefreshBrightnessAsync();
         _ = ScanWifiAsync();
+        ReadNightLight();
     }
 
     public void OnClosed()
@@ -483,6 +561,22 @@ public sealed class ControlCentreViewModel : ObservableObject, IDisposable
         _brightnessLevel = _brightness.Level;
         OnPropertyChanged(nameof(Brightness));
         OnPropertyChanged(nameof(HasBrightness));
+        OnPropertyChanged(nameof(ShowDisplayControls));
+    }
+
+    private void ReadNightLight()
+    {
+        NightLightService.Status status = _nightLight.Read();
+        _writingNightLight = true;
+        _nightLightSupported = status.Supported;
+        _nightLightOn = status.Enabled;
+        _nightLightStrength = status.Strength;
+        _writingNightLight = false;
+        OnPropertyChanged(nameof(NightLightSupported));
+        OnPropertyChanged(nameof(IsNightLightOn));
+        OnPropertyChanged(nameof(NightLightStrength));
+        OnPropertyChanged(nameof(NightLightStatus));
+        OnPropertyChanged(nameof(ShowDisplayControls));
     }
 
     private void SelectOutput(AudioDeviceEntry device)
@@ -490,6 +584,26 @@ public sealed class ControlCentreViewModel : ObservableObject, IDisposable
         if (device.IsDefault) return;
         if (!_audio.SetDefaultOutput(device.Id)) return;
         OutputDevices = OutputDevices.Select(d => d with { IsDefault = d.Id == device.Id }).ToList();
+    }
+
+    private void ConfirmPower(string title, string message, Action action)
+    {
+        if (!WindowActions.Confirm(title, message)) return;
+        CloseRequested?.Invoke(this, EventArgs.Empty);
+        action();
+    }
+
+    private void LaunchTool(string fileName)
+    {
+        CloseRequested?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            Process.Start(new ProcessStartInfo(fileName) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
     }
 
     private void OpenUri(string uri)

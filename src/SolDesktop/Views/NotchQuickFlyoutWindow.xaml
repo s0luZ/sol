@@ -6,7 +6,7 @@
         Title="Sol Quick"
         SizeToContent="WidthAndHeight"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True" ShowActivated="False"
         FontFamily="{DynamicResource Sol.TextFont}"
         Foreground="{DynamicResource Sol.ForegroundBrush}"
         PreviewKeyDown="OnPreviewKeyDown">
@@ -124,6 +124,8 @@
             </Setter>
         </Style>
         <Style x:Key="CC.Password" TargetType="PasswordBox">
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnPasswordMouseDown" />
+            <EventSetter Event="LostKeyboardFocus" Handler="OnPasswordLostFocus" />
             <Setter Property="Foreground" Value="{DynamicResource Sol.ForegroundBrush}" />
             <Setter Property="CaretBrush" Value="{DynamicResource Sol.ForegroundBrush}" />
             <Setter Property="Template">

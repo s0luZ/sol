@@ -15,6 +15,7 @@ public static class NativeMethods
     public const uint GA_ROOT = 2;
 
     public const int SW_HIDE = 0;
+    public const int SW_MAXIMIZE = 3;
     public const int SW_MINIMIZE = 6;
     public const int SW_SHOWNA = 8;
     public const int SW_RESTORE = 9;
@@ -81,6 +82,7 @@ public static class NativeMethods
     public const int WM_SYSKEYDOWN = 0x0104;
     public const int WM_SYSKEYUP = 0x0105;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
+    public static readonly IntPtr HWND_NOTOPMOST = new(-2);
     public const uint KEYEVENTF_KEYUP = 0x2;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -232,6 +234,20 @@ public static class NativeMethods
     public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
+    public static extern IntPtr GetShellWindow();
+
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vKey);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool LockWorkStation();
+
+    [DllImport("powrprof.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);
+
+    [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
 
@@ -289,7 +305,20 @@ public static class NativeMethods
     public static extern IntPtr GetDC(IntPtr hWnd);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr GetWindowDC(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
     public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    public const uint PW_RENDERFULLCONTENT = 2;
+    public const uint SRCCOPY = 0x00CC0020;
 
     // ---- gdi32 ----
 
@@ -302,6 +331,23 @@ public static class NativeMethods
     [DllImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool DeleteObject(IntPtr ho);
+
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int cx, int cy);
+
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr SelectObject(IntPtr hdc, IntPtr h);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool BitBlt(IntPtr hdcDest, int x, int y, int cx, int cy, IntPtr hdcSrc, int x1, int y1, uint rop);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DeleteDC(IntPtr hdc);
 
     // ---- kernel32 ----
 
@@ -532,6 +578,12 @@ public static class NativeMethods
     {
         long current = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(current | flags));
+    }
+
+    public static void RemoveExtendedStyle(IntPtr hwnd, long flags)
+    {
+        long current = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(current & ~flags));
     }
 
     public static void UseRoundedCorners(IntPtr hwnd)

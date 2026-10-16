@@ -58,6 +58,9 @@ public sealed class AppSettings
     public TaskbarMode TaskbarMode { get; set; } = TaskbarMode.Hide;
     public bool CenterStartMenu { get; set; } = true;
 
+    /// <summary>Keep the notch and dock hidden while a fullscreen app is in front, and do not take focus from it.</summary>
+    public bool GamingMode { get; set; } = true;
+
     /// <summary>Shortcut paths, exe paths or shell:AppsFolder\&lt;AppUserModelID&gt; entries. Null until first import.
     /// Folder pins are stored as <c>folder:{id}</c>.</summary>
     public List<string>? PinnedApps { get; set; }

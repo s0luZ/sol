@@ -56,9 +56,9 @@
                               CornerRadius="{Binding CornerRadius, Source={x:Static vm:Appearance.Current}}"
                               FlareRadius="{Binding FlareRadius, Source={x:Static vm:Appearance.Current}}"
                               Cursor="SizeNS"
-                              MouseLeftButtonDown="OnBarMouseDown"
-                              MouseMove="OnBarMouseMove"
-                              MouseLeftButtonUp="OnBarMouseUp"
+                              PreviewMouseLeftButtonDown="OnBarMouseDown"
+                              PreviewMouseMove="OnBarMouseMove"
+                              PreviewMouseLeftButtonUp="OnBarMouseUp"
                               LostMouseCapture="OnBarLostCapture"
                               MouseRightButtonUp="OnBarRightClick">
             <controls:FlaredPanel.RenderTransform>
@@ -89,9 +89,15 @@
                 <!-- Left: Sol mark, time, date -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse Width="8" Height="8" Fill="{DynamicResource Sol.AccentBrush}" VerticalAlignment="Center" Margin="0,0,9,0" />
-                    <TextBlock Text="{Binding TimeText}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding DateText}" FontSize="12" Foreground="{DynamicResource Sol.ForegroundDimBrush}"
-                               VerticalAlignment="Center" Margin="8,0,0,0" />
+                    <Button Style="{StaticResource Notch.Hit}" Click="OnClockClick" Padding="2,0"
+                            Foreground="{DynamicResource Sol.ForegroundBrush}" Cursor="Hand">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding TimeText}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Sol.ForegroundBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding DateText}" FontSize="12" Foreground="{DynamicResource Sol.ForegroundDimBrush}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- Right: status icons — each opens only that control, plus a tray chevron. -->

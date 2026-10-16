@@ -40,7 +40,9 @@ public sealed class TaskbarService
     private int _centerGeneration;
     private volatile bool _startVisible;
     private volatile bool _winHeld;
+    private bool _sawStartWindow;
     private int _goneTicks;
+    private int _winUpTicks;
 
     public TaskbarService(SettingsService settings)
     {
@@ -55,6 +57,11 @@ public sealed class TaskbarService
 
     /// <summary>True while the Start menu (or Search/Phone flyout) is on screen.</summary>
     public event EventHandler<bool>? StartVisibilityChanged;
+
+    /// <summary>Fires while the Win key or Start menu is holding the dock open, so it can stay above a game.</summary>
+    public event EventHandler? HoldPulse;
+
+    public bool IsStartMenuVisible() => StartIsVisible();
 
     public void Apply(TaskbarMode mode, bool centerStart)
     {
@@ -181,19 +188,44 @@ public sealed class TaskbarService
 
     private void PollStart()
     {
+        // Games (Valorant included) often swallow the Win key before the low-level hook.
+        // The async key state still updates, so the dock can come up over fullscreen.
+        if (WinIsDown())
+        {
+            _winHeld = true;
+            _winUpTicks = 0;
+        }
+        else if (_winHeld && ++_winUpTicks >= 3)
+        {
+            _winHeld = false;
+        }
+
         bool startOpen = StartIsVisible();
-        if (startOpen)
+        if (startOpen) _sawStartWindow = true;
+
+        if (startOpen || _winHeld)
         {
             _goneTicks = 0;
             PublishStart(true);
+            HoldPulse?.Invoke(this, EventArgs.Empty);
             return;
         }
 
-        if (_winHeld) return;
-
         _goneTicks++;
-        if (_goneTicks >= 4) PublishStart(false);
+        int limit = _sawStartWindow ? 4 : 18;
+        if (_goneTicks >= limit)
+        {
+            _sawStartWindow = false;
+            PublishStart(false);
+        }
+        else if (_startVisible)
+        {
+            HoldPulse?.Invoke(this, EventArgs.Empty);
+        }
     }
+
+    private static bool WinIsDown() =>
+        (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0 || (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
 
     private void PublishStart(bool visible)
     {

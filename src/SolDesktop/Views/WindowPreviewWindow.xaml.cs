@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -46,6 +48,21 @@ public partial class WindowPreviewWindow : Window
         UseRoundedCorners(_hwnd);
     }
 
+    /// <summary>Keep the picker above the taskbar and Start while Win is held.</summary>
+    public void RaiseAbove()
+    {
+        if (_hwnd == IntPtr.Zero || !IsVisible) return;
+        SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
+    /// <summary>Move the cards above the Windows taskbar, then re-assert z-order.</summary>
+    public void KeepClickable()
+    {
+        if (!IsVisible || ActualHeight <= 0) return;
+        Reposition();
+        RaiseAbove();
+    }
+
     /// <param name="anchorCenterX">Horizontal centre of the dock icon, in DIPs.</param>
     /// <param name="anchorTop">Top of the dock bar, in DIPs.</param>
     public void ShowFor(DockItemViewModel item, double anchorCenterX, double anchorTop)
@@ -55,10 +72,12 @@ public partial class WindowPreviewWindow : Window
         _anchorTop = anchorTop;
         SetCards(item);
         if (!IsVisible) Show();
+        RaiseAbove();
         Dispatcher.InvokeAsync(() =>
         {
             Reposition();
             RegisterThumbnails();
+            RaiseAbove();
         }, DispatcherPriority.Loaded);
     }
 
@@ -99,6 +118,92 @@ public partial class WindowPreviewWindow : Window
         double maxLeft = SystemParameters.PrimaryScreenWidth - width - 8;
         Left = Math.Max(8, Math.Min(_anchorCenterX - width / 2, maxLeft));
         Top = _anchorTop - ActualHeight - 10;
+        LiftAboveTaskbar();
+    }
+
+    /// <summary>
+    /// The Windows taskbar (and the short bar Start brings with it) paints over the picker.
+    /// Sit the cards fully above that strip so each window can be clicked.
+    /// </summary>
+    private void LiftAboveTaskbar()
+    {
+        if (ActualHeight <= 0) return;
+        double ceiling = double.PositiveInfinity;
+
+        foreach (IntPtr tray in BottomBars())
+        {
+            if (!IsWindowVisible(tray) || !GetWindowRect(tray, out RECT bar)) continue;
+            int barHeight = bar.Bottom - bar.Top;
+            if (barHeight is < 8 or > 160) continue;
+
+            uint dpi = GetDpiForWindow(tray);
+            if (dpi == 0) dpi = 96;
+            double scale = 96.0 / dpi;
+            double barLeft = bar.Left * scale;
+            double barRight = bar.Right * scale;
+            double barTop = bar.Top * scale;
+            if (barRight < Left || barLeft > Left + ActualWidth) continue;
+            if (barTop < SystemParameters.PrimaryScreenHeight * 0.45) continue;
+            if (barTop < ceiling) ceiling = barTop;
+        }
+
+        if (double.IsPositiveInfinity(ceiling)) return;
+        if (Top + ActualHeight > ceiling - 8) Top = Math.Max(8, ceiling - ActualHeight - 8);
+    }
+
+    private static List<IntPtr> BottomBars()
+    {
+        var bars = new List<IntPtr>();
+        IntPtr primary = FindWindow("Shell_TrayWnd", null);
+        if (primary != IntPtr.Zero) bars.Add(primary);
+
+        IntPtr secondary = IntPtr.Zero;
+        while ((secondary = FindWindowEx(IntPtr.Zero, secondary, "Shell_SecondaryTrayWnd", null)) != IntPtr.Zero)
+            bars.Add(secondary);
+
+        EnumWindows((hwnd, _) =>
+        {
+            if (IsWindowVisible(hwnd) && IsStartHost(hwnd)) bars.Add(hwnd);
+            return true;
+        }, IntPtr.Zero);
+        return bars;
+    }
+
+    private static readonly string[] StartHostNames =
+    {
+        "StartMenuExperienceHost.exe",
+        "SearchHost.exe",
+    };
+
+    private static bool IsStartHost(IntPtr hwnd)
+    {
+        var className = new StringBuilder(64);
+        GetClassName(hwnd, className, className.Capacity);
+        string name = className.ToString();
+        if (name is not ("XamlExplorerHostIslandWindow" or "Windows.UI.Core.CoreWindow" or "ApplicationFrameWindow"))
+            return false;
+
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        if (pid == 0) return false;
+        IntPtr process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (process == IntPtr.Zero) return false;
+        try
+        {
+            var buffer = new StringBuilder(260);
+            int size = buffer.Capacity;
+            if (!QueryFullProcessImageName(process, 0, buffer, ref size)) return false;
+            string file = Path.GetFileName(buffer.ToString());
+            foreach (string host in StartHostNames)
+            {
+                if (file.Equals(host, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+
+            return false;
+        }
+        finally
+        {
+            CloseHandle(process);
+        }
     }
 
     private void RegisterThumbnails()

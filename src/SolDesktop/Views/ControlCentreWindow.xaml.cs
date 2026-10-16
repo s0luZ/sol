@@ -22,14 +22,19 @@ public partial class ControlCentreWindow : Window
         nameof(Reveal), typeof(double), typeof(ControlCentreWindow),
         new PropertyMetadata(0.0, (d, _) => ((ControlCentreWindow)d).ApplyReveal()));
 
-    private static readonly Duration OpenDuration = TimeSpan.FromMilliseconds(340);
-    private static readonly Duration CloseDuration = TimeSpan.FromMilliseconds(240);
+    private static readonly Duration OpenDuration = TimeSpan.FromMilliseconds(420);
+    private static readonly Duration CloseDuration = TimeSpan.FromMilliseconds(280);
     private const double PullDistance = 220;
     private const double SheetWidth = 356;
+    private const double FullCornerRadius = 28;
 
     private readonly ControlCentreViewModel _vm;
     private bool _open;
     private Size _from = new(270, 36);
+    private double _fromWidth = 220;
+    private double _fromHeight = 20;
+    private double _fromRadius = 18;
+    private double _fullSheetWidth = SheetWidth;
     private double _fullSheetHeight = 400;
 
     public ControlCentreWindow(ControlCentreViewModel vm)
@@ -62,6 +67,9 @@ public partial class ControlCentreWindow : Window
 
     /// <summary>The panel finished closing (including the morph-away animation).</summary>
     public event EventHandler? PanelClosed;
+
+    /// <summary>0 is the notch footprint, 1 is the open panel. Fired on every frame of the morph.</summary>
+    public event EventHandler<double>? RevealProgress;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -108,7 +116,7 @@ public partial class ControlCentreWindow : Window
         if (!IsVisible) return;
         _open = false;
         _fullSheetHeight = Math.Max(Sheet.ActualHeight, _fullSheetHeight);
-        AnimateReveal(0, CloseDuration, EasingMode.EaseIn, () =>
+        AnimateReveal(0, CloseDuration, EasingMode.EaseInOut, () =>
         {
             if (_open) return;
             Hide();
@@ -120,30 +128,31 @@ public partial class ControlCentreWindow : Window
     private void Prepare(Size from)
     {
         _from = from.Width > 1 && from.Height > 1 ? from : new Size(270, 36);
+        _fromRadius = SolDesktop.ViewModels.Appearance.Current.CornerRadius;
+        double chromeX = Bar.Padding.Left + Bar.Padding.Right + Bar.FlareRadius * 2;
+        double chromeY = Bar.Padding.Top + Bar.Padding.Bottom;
+        _fromWidth = Math.Max(48, _from.Width - chromeX);
+        _fromHeight = Math.Max(8, _from.Height - chromeY);
         BeginAnimation(RevealProperty, null);
 
-        if (IsVisible)
+        if (!IsVisible)
         {
-            return;
+            Sheet.Opacity = 0;
+            MeasureSheet();
+            Show();
+            UpdateLayout();
+            MeasureSheet();
+            Dispatcher.BeginInvoke(_vm.OnOpened, DispatcherPriority.Background);
         }
 
-        _vm.OnOpened();
-        Sheet.MaxHeight = double.PositiveInfinity;
-        Sheet.Width = SheetWidth;
-        Show();
-        UpdateLayout();
-        _fullSheetHeight = Math.Max(Sheet.DesiredSize.Height, Sheet.ActualHeight);
-        PositionAtTopCenter();
         Reveal = 0;
         ApplyReveal();
-        UpdateLayout();
-        PositionAtTopCenter();
     }
 
     private void OpenPanel()
     {
         _open = true;
-        AnimateReveal(1, OpenDuration, EasingMode.EaseOut, null);
+        AnimateReveal(1, OpenDuration, EasingMode.EaseInOut, null);
         Activate();
     }
 
@@ -159,21 +168,34 @@ public partial class ControlCentreWindow : Window
 
     private void ApplyReveal()
     {
-        if (Sheet is null) return;
+        if (Sheet is null || ClipHost is null) return;
 
         double t = Math.Clamp(Reveal, 0, 1);
-        double fromWidth = Math.Max(180, _from.Width - 28);
-        double fromHeight = Math.Max(28, _from.Height - 4);
+        double fullWidth = Math.Max(_fullSheetWidth, 1);
+        double fullHeight = Math.Max(_fullSheetHeight, _fromHeight);
+        double width = _fromWidth + (fullWidth - _fromWidth) * t;
+        double height = _fromHeight + (fullHeight - _fromHeight) * t;
 
-        if (t >= 0.999)
-        {
-            Sheet.Width = SheetWidth;
-            Sheet.MaxHeight = double.PositiveInfinity;
-            return;
-        }
+        ClipHost.Width = width;
+        ClipHost.Height = height;
+        Canvas.SetLeft(Sheet, (width - fullWidth) / 2);
+        Bar.CornerRadius = _fromRadius + (FullCornerRadius - _fromRadius) * t;
+        Sheet.Opacity = ContentFade(t);
+        RevealProgress?.Invoke(this, t);
+    }
 
-        Sheet.Width = fromWidth + (SheetWidth - fromWidth) * t;
-        Sheet.MaxHeight = fromHeight + (Math.Max(_fullSheetHeight, fromHeight) - fromHeight) * t;
+    private void MeasureSheet()
+    {
+        Sheet.Measure(new Size(SheetWidth, double.PositiveInfinity));
+        _fullSheetWidth = Math.Max(Sheet.DesiredSize.Width, SheetWidth);
+        _fullSheetHeight = Math.Max(Sheet.DesiredSize.Height, 1);
+    }
+
+    /// <summary>Keep the shell empty through the notch-sized part, then bring the whole panel in together.</summary>
+    private static double ContentFade(double t)
+    {
+        double u = Math.Clamp((t - 0.46) / 0.42, 0, 1);
+        return u * u * (3 - 2 * u);
     }
 
     // ---- level sliders: drag anywhere on the bar, like iOS ----

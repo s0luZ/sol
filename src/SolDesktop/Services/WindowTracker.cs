@@ -75,6 +75,9 @@ public sealed class WindowTracker : IDisposable
 
     public bool AnyWindowIntersects(RECT zone) => Windows.Any(w => !w.IsMinimized && w.Bounds.IntersectsWith(zone));
 
+    /// <summary>True when the foreground window covers the primary monitor, including maximized borderless games.</summary>
+    public bool ForegroundFillsScreen => FillsScreen(ForegroundWindow);
+
     private void OnWinEvent(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
     {
         if (idObject != 0 || idChild != 0) return;
@@ -166,9 +169,11 @@ public sealed class WindowTracker : IDisposable
         return new TrackedWindow(hwnd, title, (int)pid, exePath, appId, bounds, IsIconic(hwnd));
     }
 
-    private bool IsFullscreen(IntPtr hwnd)
+    private bool IsFullscreen(IntPtr hwnd) => !IsZoomed(hwnd) && FillsScreen(hwnd);
+
+    private bool FillsScreen(IntPtr hwnd)
     {
-        if (hwnd == IntPtr.Zero || IsZoomed(hwnd)) return false;
+        if (hwnd == IntPtr.Zero) return false;
 
         GetWindowThreadProcessId(hwnd, out uint pid);
         if (pid == _ownProcessId || IgnoredClasses.Contains(GetClass(hwnd))) return false;
@@ -179,7 +184,7 @@ public sealed class WindowTracker : IDisposable
         if (!GetWindowRect(hwnd, out RECT r)) return false;
 
         RECT m = info.rcMonitor;
-        return r.Left <= m.Left && r.Top <= m.Top && r.Right >= m.Right && r.Bottom >= m.Bottom;
+        return r.Left <= m.Left + 2 && r.Top <= m.Top + 2 && r.Right >= m.Right - 2 && r.Bottom >= m.Bottom - 2;
     }
 
     private string GetText(IntPtr hwnd)

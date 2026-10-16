@@ -257,7 +257,8 @@
                 <DropShadowEffect BlurRadius="24" ShadowDepth="4" Direction="270" Opacity="0.5" Color="Black" />
             </controls:FlaredPanel.Effect>
 
-            <StackPanel x:Name="Sheet" Width="356" ClipToBounds="True">
+            <Canvas x:Name="ClipHost" ClipToBounds="True" Width="356">
+            <StackPanel x:Name="Sheet" Width="356" Canvas.Left="0" Canvas.Top="0">
                 <StackPanel.LayoutTransform>
                     <ScaleTransform ScaleX="{Binding ControlCentreScale, Source={x:Static vm:Appearance.Current}}"
                                     ScaleY="{Binding ControlCentreScale, Source={x:Static vm:Appearance.Current}}" />
@@ -414,22 +415,79 @@
                         </Grid>
                     </Border>
 
-                    <!-- Brightness -->
+                    <!-- Brightness and Night Light -->
                     <Border Style="{StaticResource CC.Tile}" Margin="0,10,0,0" Padding="8,8,8,8"
-                            Visibility="{Binding HasBrightness, Converter={StaticResource BoolToVisibility}}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="32" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="32" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource CC.Glyph}" Text="&#xE706;" FontSize="15" />
-                            <Slider Grid.Column="1" Style="{StaticResource CC.Level}" Margin="8,0"
-                                    Value="{Binding Brightness, Mode=TwoWay}" ToolTip="Brightness"
-                                    PreviewMouseLeftButtonDown="OnLevelMouseDown" PreviewMouseMove="OnLevelMouseMove"
-                                    PreviewMouseLeftButtonUp="OnLevelMouseUp" MouseWheel="OnLevelWheel" />
-                        </Grid>
+                            Visibility="{Binding ShowDisplayControls, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <Grid Visibility="{Binding HasBrightness, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="32" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="32" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource CC.Glyph}" Text="&#xE706;" FontSize="15" />
+                                <Slider Grid.Column="1" Style="{StaticResource CC.Level}" Margin="8,0"
+                                        Value="{Binding Brightness, Mode=TwoWay}" ToolTip="Brightness"
+                                        PreviewMouseLeftButtonDown="OnLevelMouseDown" PreviewMouseMove="OnLevelMouseMove"
+                                        PreviewMouseLeftButtonUp="OnLevelMouseUp" MouseWheel="OnLevelWheel" />
+                            </Grid>
+
+                            <Button Style="{StaticResource CC.Row}" Margin="0,6,0,0" Padding="4,6"
+                                    HorizontalContentAlignment="Stretch"
+                                    Visibility="{Binding NightLightSupported, Converter={StaticResource BoolToVisibility}}"
+                                    Command="{Binding ToggleNightLightSectionCommand}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="32" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="28" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource CC.Glyph}" Text="&#xE708;" FontSize="15" />
+                                    <TextBlock Grid.Column="1" Text="Night light" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <TextBlock Grid.Column="2" Text="{Binding NightLightStatus}" FontSize="12"
+                                               Foreground="{DynamicResource Sol.ForegroundDimBrush}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                    <TextBlock Grid.Column="3" Style="{StaticResource CC.Glyph}" Text="{Binding NightLightChevron}" FontSize="12" />
+                                </Grid>
+                            </Button>
+
+                            <StackPanel Margin="4,4,4,2"
+                                        Visibility="{Binding IsNightLightOpen, Converter={StaticResource BoolToVisibility}}">
+                                <Grid Margin="0,4,0,8">
+                                    <TextBlock Text="Blue light filter" FontSize="13" VerticalAlignment="Center" />
+                                    <CheckBox Style="{StaticResource Sol.ToggleSwitch}" HorizontalAlignment="Right"
+                                              IsChecked="{Binding IsNightLightOn, Mode=TwoWay}" />
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="72" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Strength" FontSize="12" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Sol.ForegroundDimBrush}" />
+                                    <Slider Grid.Column="1" Style="{StaticResource CC.Level}" Minimum="0" Maximum="100"
+                                            Value="{Binding NightLightStrength, Mode=TwoWay}" ToolTip="Night light strength"
+                                            PreviewMouseLeftButtonDown="OnLevelMouseDown" PreviewMouseMove="OnLevelMouseMove"
+                                            PreviewMouseLeftButtonUp="OnLevelMouseUp" MouseWheel="OnLevelWheel" />
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
                     </Border>
+
+                    <TextBlock Style="{StaticResource Sol.Label}" Text="Quick actions" Margin="4,14,4,8" />
+                    <WrapPanel>
+                        <Button Style="{StaticResource CC.Pill}" Content="File Explorer" Margin="0,0,8,8" Command="{Binding OpenFileExplorerCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Task Manager" Margin="0,0,8,8" Command="{Binding OpenTaskManagerCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Display" Margin="0,0,8,8" Command="{Binding OpenDisplaySettingsCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Night Light" Margin="0,0,8,8" Command="{Binding OpenNightLightCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Snipping Tool" Margin="0,0,8,8" Command="{Binding OpenSnippingToolCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Notifications" Margin="0,0,8,8" Command="{Binding OpenNotificationsCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Do Not Disturb" Margin="0,0,8,8" Command="{Binding OpenQuietHoursCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Lock" Margin="0,0,8,8" Command="{Binding LockCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Sleep" Margin="0,0,8,8" Command="{Binding SleepCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Restart" Margin="0,0,8,8" Command="{Binding RestartCommand}" />
+                        <Button Style="{StaticResource CC.Pill}" Content="Shut down" Margin="0,0,8,8" Command="{Binding ShutDownCommand}" />
+                    </WrapPanel>
                 </StackPanel>
 
                 <!-- ================= Wi-Fi page ================= -->
@@ -696,6 +754,7 @@
                             Command="{Binding OpenEthernetSettingsCommand}" />
                 </StackPanel>
             </StackPanel>
+            </Canvas>
         </controls:FlaredPanel>
     </Grid>
 </Window>

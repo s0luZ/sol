@@ -220,6 +220,20 @@
                             </Border>
 
                             <Border Style="{StaticResource Sol.Card}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Style="{StaticResource Sol.Label}" Text="Gaming mode" />
+                                        <TextBlock Style="{StaticResource Sol.Hint}" Text="While a game or video is fullscreen, the notch and dock stay hidden. Sol does not pull that app out of fullscreen or draw over it." />
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" Style="{StaticResource Sol.ToggleSwitch}" IsChecked="{Binding GamingMode}" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource Sol.Card}">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Sol.Label}" Text="Windows taskbar" />
                                     <WrapPanel Margin="0,10,0,0">

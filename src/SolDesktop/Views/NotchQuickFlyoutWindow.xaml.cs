@@ -1,10 +1,12 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using SolDesktop.Interop;
 using SolDesktop.ViewModels;
+using static SolDesktop.Interop.NativeMethods;
 
 namespace SolDesktop.Views;
 
@@ -21,21 +23,25 @@ public enum NotchQuickKind
 public partial class NotchQuickFlyoutWindow : Window
 {
     private readonly ControlCentreViewModel _vm;
+    private readonly LowLevelMouseProc _hookProc;
     private double _anchorX;
     private double _anchorBottom;
-    private bool _suppressDeactivate;
+    private IntPtr _hook;
 
     public NotchQuickFlyoutWindow(ControlCentreViewModel vm)
     {
         InitializeComponent();
         _vm = vm;
         DataContext = vm;
+        _hookProc = OnOutsideClick;
         SizeChanged += (_, _) => Reposition();
         Deactivated += (_, _) =>
         {
-            if (!_suppressDeactivate) HideFlyout();
+            if (IsPointerOverNotch()) return;
+            HideFlyout();
         };
         _vm.CloseRequested += (_, _) => HideFlyout();
+        Closed += (_, _) => ReleaseHook();
     }
 
     public event EventHandler? ClosedFlyout;
@@ -44,18 +50,27 @@ public partial class NotchQuickFlyoutWindow : Window
     {
         _anchorX = anchorX;
         _anchorBottom = anchorBottom;
+        bool opening = !IsVisible;
         ApplyKind(kind, status);
-        _vm.OnOpened();
         if (!IsVisible) Show();
         Reposition();
-        _suppressDeactivate = true;
-        Activate();
-        Dispatcher.BeginInvoke(() => _suppressDeactivate = false);
+        EnsureHook();
+        if (!opening) return;
+
+        // Refresh after the panel is on screen. Doing it here blocked the click
+        // that switches Ethernet to Bluetooth.
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!IsVisible) return;
+            _vm.OnOpened();
+            ApplyKind(kind, status);
+        }, System.Windows.Threading.DispatcherPriority.Background);
     }
 
     public void HideFlyout()
     {
         if (!IsVisible) return;
+        ReleaseHook();
         Hide();
         _vm.OnClosed();
         ClosedFlyout?.Invoke(this, EventArgs.Empty);
@@ -65,8 +80,89 @@ public partial class NotchQuickFlyoutWindow : Window
     {
         base.OnSourceInitialized(e);
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
-        NativeMethods.AddExtendedStyle(hwnd, NativeMethods.WS_EX_TOOLWINDOW);
+        NativeMethods.AddExtendedStyle(hwnd, NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE);
         NativeMethods.UseRoundedCorners(hwnd);
+    }
+
+    private void EnsureHook()
+    {
+        if (_hook != IntPtr.Zero) return;
+        _hook = SetWindowsHookEx(WH_MOUSE_LL, _hookProc, GetModuleHandle(null), 0);
+    }
+
+    private void ReleaseHook()
+    {
+        if (_hook == IntPtr.Zero) return;
+        UnhookWindowsHookEx(_hook);
+        _hook = IntPtr.Zero;
+    }
+
+    private IntPtr OnOutsideClick(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0 && IsVisible)
+        {
+            int msg = wParam.ToInt32();
+            if (msg is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN)
+            {
+                var info = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                if (IsOverNotch(info.pt))
+                {
+                    // A status icon click has to reach the notch. Drop foreground first so
+                    // Windows does not spend that click dismissing this window.
+                    IntPtr self = new WindowInteropHelper(this).Handle;
+                    if (GetForegroundWindow() == self) SetForegroundWindow(GetShellWindow());
+                }
+                else if (!IsOverSelf(info.pt))
+                {
+                    Dispatcher.BeginInvoke(HideFlyout);
+                }
+            }
+        }
+
+        return CallNextHookEx(_hook, nCode, wParam, lParam);
+    }
+
+    private bool IsOverSelf(POINT screen)
+    {
+        IntPtr self = new WindowInteropHelper(this).Handle;
+        if (self == IntPtr.Zero) return false;
+        IntPtr hit = WindowFromPoint(screen);
+        IntPtr root = GetAncestor(hit, GA_ROOT);
+        return root == self || hit == self;
+    }
+
+    private static bool IsOverNotch(POINT screen)
+    {
+        IntPtr hit = WindowFromPoint(screen);
+        IntPtr root = GetAncestor(hit, GA_ROOT);
+        foreach (Window window in Application.Current.Windows)
+        {
+            if (window is not NotchWindow) continue;
+            IntPtr hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero && (hwnd == root || hwnd == hit)) return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsPointerOverNotch()
+    {
+        return GetCursorPos(out POINT point) && IsOverNotch(point);
+    }
+
+    private void OnPasswordMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        NativeMethods.RemoveExtendedStyle(hwnd, NativeMethods.WS_EX_NOACTIVATE);
+        Activate();
+        if (sender is PasswordBox box) box.Focus();
+    }
+
+    private void OnPasswordLostFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero) NativeMethods.AddExtendedStyle(hwnd, NativeMethods.WS_EX_NOACTIVATE);
     }
 
     private void ApplyKind(NotchQuickKind kind, NotchViewModel status)

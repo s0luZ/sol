@@ -113,6 +113,7 @@
                 <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="90" Opacity="0.45" Color="Black" />
             </controls:FlaredPanel.Effect>
 
+            <StackPanel Orientation="Horizontal">
             <ItemsControl x:Name="Items"
                           ItemsSource="{Binding Items}"
                           ItemTemplate="{StaticResource DockItemTemplate}"
@@ -125,6 +126,21 @@
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
             </ItemsControl>
+            <Button Width="8" Height="18" Margin="6,0,2,12" VerticalAlignment="Center" Focusable="False"
+                    Cursor="Hand" ToolTip="Show desktop" Click="OnShowDesktop">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Line" Width="3" Height="14" CornerRadius="1.5" HorizontalAlignment="Center"
+                                Background="{DynamicResource Sol.ForegroundDimBrush}" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Line" Property="Background" Value="{DynamicResource Sol.ForegroundBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+            </StackPanel>
         </controls:FlaredPanel>
     </Grid>
 </Window>

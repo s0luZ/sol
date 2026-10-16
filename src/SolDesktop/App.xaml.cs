@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
+using SolDesktop.Interop;
 using SolDesktop.Services;
 using SolDesktop.Services.Status;
 using SolDesktop.ViewModels;
@@ -49,6 +50,7 @@ public partial class App : Application
     private TrayIconService? _tray;
     private OverflowTrayWindow? _overflow;
     private NotchQuickFlyoutWindow? _quick;
+    private CalendarWindow? _calendar;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -86,6 +88,7 @@ public partial class App : Application
         };
 
         _settings.Load();
+        Log.Info("Started");
         ThemeService.Apply(_settings.Current);
 
         _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
@@ -132,21 +135,27 @@ public partial class App : Application
             _notchWindow.Controller.KeepOpen = true;
         };
 
+        _controlCentre.RevealProgress += (_, reveal) => _notchWindow.SetHandoff(reveal);
         _notchWindow.PullStarted += (_, _) =>
         {
             HideNotchFlyouts();
             _notchWindow.Controller.KeepOpen = true;
+            _notchWindow.RaiseOverPanel();
             _controlCentre.BeginPull(_notchWindow.GetBarSize());
-            _notchWindow.Cover();
         };
         _notchWindow.PullMoved += (_, distance) => _controlCentre.UpdatePull(distance);
-        _notchWindow.PullEnded += (_, _) => _controlCentre.EndPull();
+        _notchWindow.PullEnded += (_, _) =>
+        {
+            _controlCentre.EndPull();
+            bool open = _controlCentre.IsOpen;
+            _notchWindow.ResetDrag(spring: !open);
+        };
         _notchWindow.Clicked += (_, _) =>
         {
             HideNotchFlyouts();
             _notchWindow.Controller.KeepOpen = true;
+            _notchWindow.RaiseOverPanel();
             _controlCentre.Toggle(_notchWindow.GetBarSize());
-            if (_controlCentre.IsOpen) _notchWindow.Cover();
         };
         _controlCentre.PanelClosed += (_, _) =>
         {
@@ -156,6 +165,14 @@ public partial class App : Application
 
         _dockViewModel = new DockViewModel(_tracker, _settings, _icons);
         _dockWindow = new DockWindow(_dockViewModel, _icons);
+        _calendar = new CalendarWindow();
+        _calendar.ClosedFlyout += (_, _) => ReleaseNotchHold();
+        _notchWindow.CalendarRequested += (_, anchor) =>
+        {
+            HideNotchFlyouts();
+            _notchWindow.Controller.KeepOpen = true;
+            _calendar.ShowBelow(anchor.X, anchor.Y);
+        };
         _taskbar.StartVisibilityChanged += (_, visible) =>
         {
             void Apply()
@@ -163,11 +180,16 @@ public partial class App : Application
                 if (_dockWindow is null) return;
                 bool hold = visible && _settings.Current.DockEnabled;
                 _dockWindow.Controller.StartHold = hold;
-                if (hold) _dockWindow.RaiseAbove();
+                if (hold) RaiseDockOverShell();
             }
 
             if (Dispatcher.CheckAccess()) Apply();
             else Dispatcher.Invoke(Apply);
+        };
+        _taskbar.HoldPulse += (_, _) =>
+        {
+            if (Dispatcher.CheckAccess()) RaiseDockOverShell();
+            else Dispatcher.BeginInvoke(RaiseDockOverShell);
         };
 
         _tray = new TrayIconService();
@@ -243,6 +265,7 @@ public partial class App : Application
         if (_notchWindow is not null)
         {
             _notchWindow.Controller.Mode = s.NotchMode;
+            _notchWindow.Controller.Gaming = s.GamingMode;
             if (!s.NotchEnabled)
             {
                 _notchWindow.Hide();
@@ -259,6 +282,7 @@ public partial class App : Application
         if (_dockWindow is not null)
         {
             _dockWindow.Controller.Mode = s.DockMode;
+            _dockWindow.Controller.Gaming = s.GamingMode;
             _dockWindow.ApplyLayout();
             if (!s.DockEnabled) _dockWindow.Hide();
             else if (!_dockWindow.IsVisible) _dockWindow.Show();
@@ -267,6 +291,13 @@ public partial class App : Application
         _taskbar?.Apply(s.DockEnabled ? s.TaskbarMode : TaskbarMode.Leave, s.CenterStartMenu);
         _tray?.Sync(s.NotchEnabled, s.DockEnabled);
         UpdateBarEnvironment();
+    }
+
+    private void RaiseDockOverShell()
+    {
+        if (_dockWindow is not { Controller.StartHold: true }) return;
+        if (_settings.Current.GamingMode && _tracker?.IsForegroundFullscreen == true) return;
+        _dockWindow.RaiseAbove();
     }
 
     private void OnTrackerChanged(object? sender, EventArgs e)
@@ -295,13 +326,14 @@ public partial class App : Application
     {
         _overflow?.HideFlyout();
         _quick?.HideFlyout();
+        _calendar?.HideFlyout();
     }
 
     private void ReleaseNotchHold()
     {
         if (_notchWindow is null) return;
         if (_controlCentre is { IsOpen: true }) return;
-        if (_overflow is { IsVisible: true } || _quick is { IsVisible: true })
+        if (_overflow is { IsVisible: true } || _quick is { IsVisible: true } || _calendar is { IsVisible: true })
         {
             _notchWindow.Controller.KeepOpen = true;
             return;
@@ -319,6 +351,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Log.Info("Stopped");
         _showSettingsWait?.Unregister(null);
         _showSettingsEvent?.Dispose();
         _quitWait?.Unregister(null);
@@ -331,6 +364,7 @@ public partial class App : Application
         _settingsWindow?.Close();
         _overflow?.Close();
         _quick?.Close();
+        _calendar?.Close();
         _notchWindow?.Close();
         _controlCentre?.Close();
         _dockWindow?.Close();

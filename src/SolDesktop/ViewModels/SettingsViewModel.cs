@@ -93,6 +93,7 @@ public sealed class SettingsViewModel : ObservableObject
     public double DockIconSize { get => S.DockIconSize; set => Set(S.DockIconSize, Math.Round(value), v => S.DockIconSize = v); }
     public double DockMagnification { get => S.DockMagnification; set => Set(S.DockMagnification, Math.Round(value, 2), v => S.DockMagnification = v); }
     public TaskbarMode TaskbarMode { get => S.TaskbarMode; set => Set(S.TaskbarMode, value, v => S.TaskbarMode = v); }
+    public bool GamingMode { get => S.GamingMode; set => Set(S.GamingMode, value, v => S.GamingMode = v); }
     public bool CenterStartMenu { get => S.CenterStartMenu; set => Set(S.CenterStartMenu, value, v => S.CenterStartMenu = v); }
 
     // ---- Appearance ----
